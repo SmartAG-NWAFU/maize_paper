@@ -1,0 +1,3 @@
+﻿region,sowing_count,sowing_mean,sowing_median,sowing_min,sowing_max,density_count,density_mean,density_median,density_min,density_max
+Hebei,26,167.96,167.5,160,177,26,845878.85,829125.0,747000.0,1033200.0
+Shandong,55,168.25,169.0,159,185,55,1035135.0,1005075.0,751050.0,1551825.0

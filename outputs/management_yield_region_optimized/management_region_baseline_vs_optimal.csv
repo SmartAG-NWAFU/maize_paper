@@ -1,0 +1,5 @@
+﻿region_code,region_name,yield_value,yield_mean,yield_q25,yield_q75,profit_value,input_cost,objective_value,distance_penalty,Density,Fer_N,Fer_P,Fer_K,Fer_Count,Pest_Count,Sow_DOY,Irr_Count,Irr_Elec,Pest_Cost,result_type,irrigation_mode,irrigation_label
+0,Hebei,9585.0,9516.79,8362.69,10138.09,10764.39,12171.68,9585.0,0.0,55275.0,189.0,40.5,55.88,1.0,2.0,167.5,1.0,329.33,530.92,Baseline median,,Baseline median
+0,Hebei,12209.45,12269.6,12181.26,12253.01,16163.22,13200.61,11805.45,2.69,64000.0,215.0,55.0,80.0,1.0,1.0,164.0,2.0,550.0,350.0,Optimal yield,Drip,滴灌
+1,Shandong,10721.85,10634.52,9032.62,11755.35,12031.56,12150.0,10721.85,0.0,67005.0,217.5,75.0,85.93,1.0,2.0,169.0,1.0,300.0,255.0,Baseline median,,Baseline median
+1,Shandong,12603.64,12560.12,12203.56,12925.38,17615.88,13047.58,12555.76,0.32,68000.0,220.0,80.0,85.0,2.0,2.0,163.0,2.0,650.0,300.0,Optimal yield,Drip,滴灌

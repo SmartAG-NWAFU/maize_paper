@@ -1,0 +1,12 @@
+﻿feature,label,n,x_min,x_max,mean_abs_shap
+Sow_DOY,Sowing date (DOY),81,159.0,185.0,133.67379760742188
+Density,Plant density (plants/ha),81,49800.0,103455.0,589.2532958984375
+Fer_N,N application (kg/ha),81,105.0,326.25,101.29969787597656
+Fer_P,P application (kg/ha),81,24.0,136.5,122.59626007080078
+Fer_K,K application (kg/ha),81,30.0,128.25,139.5821990966797
+Fer_Count,Fertilization events,81,1.0,3.0,0.0
+Pest_Count,Pesticide events,81,0.0,4.0,159.4038543701172
+Pest_Cost,Pesticide cost (yuan/ha),81,0.0,812.85,71.2676773071289
+Irr_Count,Irrigation events,81,0.0,3.0,143.45245361328125
+Irr_Elec,Irrigation electricity (kWh/ha),81,0.0,1305.45,164.7279052734375
+irrigation_mode,Irrigation mode,81,,,182.24673000382788

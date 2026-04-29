@@ -1,0 +1,3 @@
+﻿region,fert_count_count,fert_count_mean,fert_count_median,fert_count_min,fert_count_max,n_count,n_mean,n_median,n_min,n_max,p_count,p_mean,p_median,p_min,p_max,k_count,k_mean,k_median,k_min,k_max
+Hebei,26,1.08,1.0,1,2,26,192.04,189.0,132.0,279.38,26,49.91,40.5,30.0,99.0,26,57.0,55.88,30.0,106.88
+Shandong,55,1.25,1.0,1,3,55,211.73,217.5,105.0,326.25,55,76.16,75.0,24.0,136.5,55,85.18,85.93,36.0,128.25

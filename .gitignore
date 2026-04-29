@@ -1,0 +1,13 @@
+# 1) 忽略所有文件
+*
+!*/
+!*.py
+!*.png
+!*.csv
+!*.pdf
+!*.xlsx
+!*.pkl
+!*.md
+!*.yml
+# 4) 允许跟踪 .gitignore 本身（强烈建议）
+!.gitignore

@@ -1,0 +1,24 @@
+| variable | original_name | label_cn | role | type | unit | description | mean | std | min | max |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| uuid | uuid | 样本标识 | id | string | - | 地块/试验唯一标识，不参与建模 | - | - | - | - |
+| Region | region_code | 地区编码 | feature | categorical | code | 试验地区编码，`0=河北`，`1=山东` | 0.68 | 0.47 | 0.00 | 1.00 |
+| Sow_DOY | sowing_date_doy | 播种日期 | feature | numeric | day of year | 播种日在一年中的序号 | 168.16 | 4.99 | 159.00 | 185.00 |
+| Density | plant_density | 种植密度 | feature | numeric | plants/ha | 单位面积种植密度，由株/亩换算为株/ha | 64959.07 | 12158.91 | 49800.00 | 103455.00 |
+| Fer_N | nitrogen_rate | 施氮量 | feature | numeric | kg/ha | 单位面积纯氮投入量，由kg/亩换算为kg/ha | 205.41 | 50.12 | 105.00 | 326.25 |
+| Fer_P | phosphorus_rate | 施磷量 | feature | numeric | kg/ha | 单位面积纯磷投入量，由kg/亩换算为kg/ha | 67.74 | 31.70 | 24.00 | 136.50 |
+| Fer_K | potassium_rate | 施钾量 | feature | numeric | kg/ha | 单位面积纯钾投入量，由kg/亩换算为kg/ha | 76.13 | 26.47 | 30.00 | 128.25 |
+| Fer_Count | fertilization_events | 施肥次数 | feature | count | count | 生育期施肥次数 | 1.20 | 0.53 | 1.00 | 3.00 |
+| Pest_Count | pesticide_application_events | 打药次数 | feature | count | count | 农药施用次数 | 1.69 | 1.02 | 0.00 | 4.00 |
+| Pest_Cost | pesticide_cost | 农药成本 | feature | numeric | yuan/ha | 单位面积农药成本，由元/亩换算为元/ha | 364.55 | 249.07 | 0.00 | 812.85 |
+| Irr_Count | irrigation_events | 灌溉次数 | feature | count | count | 生育期灌溉次数 | 1.05 | 0.76 | 0.00 | 3.00 |
+| Irr_Elec | irrigation_electricity | 灌溉用电 | feature | numeric | kWh/ha | 单位面积灌溉用电量，由kWh/亩换算为kWh/ha | 381.32 | 314.16 | 0.00 | 1305.45 |
+| Irr_Sprinkler | irrigation_mode_sprinkler | 喷灌 | feature | binary | 0/1 | 喷灌虚拟变量 | 0.28 | 0.45 | 0.00 | 1.00 |
+| Irr_None | irrigation_mode_none | 无灌溉 | feature | binary | 0/1 | 无灌溉虚拟变量 | 0.09 | 0.28 | 0.00 | 1.00 |
+| Irr_Drip | irrigation_mode_drip | 滴灌 | feature | binary | 0/1 | 滴灌虚拟变量 | 0.49 | 0.50 | 0.00 | 1.00 |
+| Irr_Flood | irrigation_mode_flood | 漫灌 | feature | binary | 0/1 | 漫灌虚拟变量 | 0.14 | 0.34 | 0.00 | 1.00 |
+| Lodging | Lodging | 倒伏率 | feature | numeric | % | 生长季倒伏率 | 3.83 | 7.79 | 0.00 | 33.00 |
+| Precip | post_sowing_precipitation_total | 生长季降水 | feature | numeric | mm | 生长季累计降水量 | 488.71 | 35.02 | 408.20 | 547.80 |
+| Rad | post_sowing_radiation_total | 生长季辐射 | feature | numeric | MJ/m2 | 生长季累计太阳辐射 | 1846.58 | 127.01 | 1548.83 | 2102.29 |
+| RH | post_sowing_relative_humidity_mean | 生长季相对湿度 | feature | numeric | % | 生长季平均相对湿度 | 74.74 | 1.25 | 72.11 | 78.61 |
+| Wind | Wind | 生长季最大风速 | feature | numeric | m/s | 生长季最大风速 | 7.98 | 0.69 | 5.51 | 8.93 |
+| Yield | yield_per_mu | 产量 | target | numeric | kg/ha | 玉米产量，由kg/亩换算为kg/ha | 10275.74 | 1910.09 | 6759.75 | 14759.10 |
