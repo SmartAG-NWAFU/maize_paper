@@ -1,5 +1,5 @@
 ﻿formula_name,target_column,variables,formula_text,intercept,coef_Density,coef_Fer_N,coef_Fer_P,coef_Fer_K,coef_Irr_Elec,fixed_cost_median
-sowing_cost,sowing_cost,Density,973.582438 + 0.004455*Density,973.582438,0.004455,,,,,
-fert_cost,fert_cost,"Fer_N,Fer_P,Fer_K",1004.451347 + 2.090763*Fer_N + 2.779660*Fer_P + 10.831659*Fer_K,1004.451347,,2.090763,2.77966,10.831659,,
-irrigation_running_cost,irrigation_cost,Irr_Elec,77.965746 + 0.637310*Irr_Elec,77.965746,,,,,0.63731,
-total_input_cost,input_cost,"fixed_cost,Density,Fer_N,Fer_P,Fer_K,Pest_Cost,Irr_Elec,device_cost_by_mode",fixed_cost + sowing_cost + fert_cost + Pest_Cost + irrigation_running_cost + irrigation_device_cost,,0.004455,2.090763,2.77966,10.831659,0.63731,6915.862886
+sowing_cost,sowing_cost,Density,947.474228 + 0.004748*Density,947.474228,0.004748,,,,,
+fert_cost,fert_cost,"Fer_N,Fer_P,Fer_K",933.690106 + 2.315647*Fer_N + 3.653902*Fer_P + 10.326065*Fer_K,933.690106,,2.315647,3.653902,10.326065,,
+irrigation_running_cost,irrigation_cost,Irr_Elec,62.339328 + 0.697031*Irr_Elec,62.339328,,,,,0.697031,
+total_input_cost,input_cost,"fixed_cost,Density,Fer_N,Fer_P,Fer_K,Pest_Cost,Irr_Elec,device_cost_by_mode",fixed_cost + sowing_cost + fert_cost + Pest_Cost + irrigation_running_cost + irrigation_device_cost,,0.004748,2.315647,3.653902,10.326065,0.697031,13951.511129

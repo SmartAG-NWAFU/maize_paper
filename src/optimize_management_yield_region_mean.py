@@ -17,16 +17,16 @@ DEFAULT_MODEL_DATA_PATH = PROJECT_ROOT / "data" / "model_vars.csv"
 DEFAULT_COST_DATA_PATH = PROJECT_ROOT / "data" / "cost_profit_output.csv"
 DEFAULT_MODEL_ROOT = PROJECT_ROOT / "outputs" / "model_outputs_fixed"
 DEFAULT_FEATURES_PATH = DEFAULT_MODEL_ROOT / "used_features.csv"
-DEFAULT_EXPORT_DIR = PROJECT_ROOT / "outputs" / "management_yield_region_optimized"
+DEFAULT_EXPORT_DIR = PROJECT_ROOT / "outputs" / "management_yield_region_optimized_mean"
 DEFAULT_COST_ESTIMATORS_CACHE_PATH = PROJECT_ROOT / "outputs" / "cost_profit_estimators_cache_ha.joblib"
 DEFAULT_COST_ESTIMATORS_MERGED_PATH = PROJECT_ROOT / "outputs" / "cost_profit_estimators_merged_ha.csv"
 DEFAULT_GRAIN_PRICE = 2.4
 DEFAULT_RANDOM_STATE = 42
 DEFAULT_MAXITER = 120
 DEFAULT_POPSIZE = 12
-DEFAULT_LOWER_QUANTILE = 0.05
-DEFAULT_UPPER_QUANTILE = 0.95
-DEFAULT_DISTANCE_PENALTY_WEIGHT = 800
+DEFAULT_LOWER_QUANTILE = 0.10
+DEFAULT_UPPER_QUANTILE = 0.90
+DEFAULT_DISTANCE_PENALTY_WEIGHT = 300.0
 
 DECISION_VALUE_STEPS = {
     "Sow_DOY": 1.0,
@@ -93,9 +93,8 @@ IRRIGATION_MODE_SPECS = [
     ("Drip", "滴灌", "Irr_Drip"),
 ]
 
-BASELINE_RESULT_TYPE = "Baseline median"
+BASELINE_RESULT_TYPE = "Baseline mean"
 OPTIMAL_YIELD_RESULT_TYPE = "Optimal yield"
-NO_OBJECTIVE_IMPROVEMENT_RESULT_TYPE = "No objective improvement"
 MODEL_NAME_PREFERENCE = ["xgboost", "random_forest", "linear_regression", "elastic_net"]
 
 REGION_CODE_MAP = {
@@ -134,7 +133,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--random-state", type=int, default=DEFAULT_RANDOM_STATE)
     parser.add_argument("--maxiter", type=int, default=DEFAULT_MAXITER)
     parser.add_argument("--popsize", type=int, default=DEFAULT_POPSIZE)
-    parser.add_argument("--aggregation", choices=["median", "mean"], default="median")
+    parser.add_argument("--aggregation", choices=["median", "mean"], default="mean")
     parser.add_argument("--lower-quantile", type=float, default=DEFAULT_LOWER_QUANTILE)
     parser.add_argument("--upper-quantile", type=float, default=DEFAULT_UPPER_QUANTILE)
     parser.add_argument("--distance-penalty-weight", type=float, default=DEFAULT_DISTANCE_PENALTY_WEIGHT)
@@ -671,7 +670,9 @@ def evaluate_region_management(
         "yield_q25": float(np.quantile(predicted_yield, 0.25)),
         "yield_q75": float(np.quantile(predicted_yield, 0.75)),
         "profit_median": float(np.median(predicted_profit)),
+        "profit_mean": float(np.mean(predicted_profit)),
         "input_cost_median": float(np.median(estimated_cost)),
+        "input_cost_mean": float(np.mean(estimated_cost)),
         "raw_objective": raw_objective,
         "distance_penalty": float(distance_penalty),
         "objective_value": float(objective_value),
@@ -724,7 +725,9 @@ def build_baseline_summary(
         "yield_q25": float(baseline_df["Yield"].quantile(0.25)),
         "yield_q75": float(baseline_df["Yield"].quantile(0.75)),
         "profit_median": float(baseline_df["profit"].median()),
+        "profit_mean": float(baseline_df["profit"].mean()),
         "input_cost_median": float(baseline_df[cost_cols["total_cost"]].median()),
+        "input_cost_mean": float(baseline_df[cost_cols["total_cost"]].mean()),
         "objective_value": aggregate_yield(baseline_df["Yield"].to_numpy(dtype=float), aggregation),
         "distance_penalty": 0.0,
         "Density": float(baseline_df["Density"].median()),
@@ -855,77 +858,65 @@ def optimize_region(
         mode_rows.append(best_evaluation)
 
     mode_results_df = pd.DataFrame(mode_rows).sort_values(
-        ["objective_value", "yield_median"],
+        ["objective_value", "yield_mean"],
         ascending=[False, False],
     ).reset_index(drop=True)
 
     baseline_summary = build_baseline_summary(region_df, region_cost_df, grain_price, aggregation)
     best_row = mode_results_df.iloc[0]
-    use_best_candidate = float(best_row["objective_value"]) > float(baseline_summary["objective_value"])
-
-    baseline_row = {
-        "region_code": int(region_code),
-        "region_name": region_name,
-        "yield_value": baseline_summary["yield_median"],
-        "yield_mean": baseline_summary["yield_mean"],
-        "yield_q25": baseline_summary["yield_q25"],
-        "yield_q75": baseline_summary["yield_q75"],
-        "profit_value": baseline_summary["profit_median"],
-        "input_cost": baseline_summary["input_cost_median"],
-        "objective_value": baseline_summary["objective_value"],
-        "distance_penalty": baseline_summary["distance_penalty"],
-        "Density": baseline_summary["Density"],
-        "Fer_N": baseline_summary["Fer_N"],
-        "Fer_P": baseline_summary["Fer_P"],
-        "Fer_K": baseline_summary["Fer_K"],
-        "Fer_Count": baseline_summary["Fer_Count"],
-        "Pest_Count": baseline_summary["Pest_Count"],
-        "Sow_DOY": baseline_summary["Sow_DOY"],
-        "Irr_Count": baseline_summary["Irr_Count"],
-        "Irr_Elec": baseline_summary["Irr_Elec"],
-        "Pest_Cost": baseline_summary["Pest_Cost"],
-        "result_type": BASELINE_RESULT_TYPE,
-        "irrigation_mode": np.nan,
-        "irrigation_label": BASELINE_RESULT_TYPE,
-    }
-    selected_candidate_row = (
-        {
-            "region_code": int(region_code),
-            "region_name": region_name,
-            "yield_value": best_row["yield_median"],
-            "yield_mean": best_row["yield_mean"],
-            "yield_q25": best_row["yield_q25"],
-            "yield_q75": best_row["yield_q75"],
-            "profit_value": best_row["profit_median"],
-            "input_cost": best_row["input_cost_median"],
-            "objective_value": best_row["objective_value"],
-            "distance_penalty": best_row["distance_penalty"],
-            "Density": best_row["Density"],
-            "Fer_N": best_row["Fer_N"],
-            "Fer_P": best_row["Fer_P"],
-            "Fer_K": best_row["Fer_K"],
-            "Fer_Count": best_row["Fer_Count"],
-            "Pest_Count": best_row["Pest_Count"],
-            "Sow_DOY": best_row["Sow_DOY"],
-            "Irr_Count": best_row["Irr_Count"],
-            "Irr_Elec": best_row["Irr_Elec"],
-            "Pest_Cost": best_row["Pest_Cost"],
-            "result_type": OPTIMAL_YIELD_RESULT_TYPE,
-            "irrigation_mode": best_row["irrigation_mode"],
-            "irrigation_label": best_row["irrigation_label"],
-        }
-        if use_best_candidate
-        else {
-            **baseline_row,
-            "result_type": NO_OBJECTIVE_IMPROVEMENT_RESULT_TYPE,
-            "irrigation_label": NO_OBJECTIVE_IMPROVEMENT_RESULT_TYPE,
-        }
-    )
 
     selected_rows_df = pd.DataFrame(
         [
-            baseline_row,
-            selected_candidate_row,
+            {
+                "region_code": int(region_code),
+                "region_name": region_name,
+                "yield_value": baseline_summary["yield_mean"],
+                "yield_mean": baseline_summary["yield_mean"],
+                "yield_q25": baseline_summary["yield_q25"],
+                "yield_q75": baseline_summary["yield_q75"],
+                "profit_value": baseline_summary["profit_mean"],
+                "input_cost": baseline_summary["input_cost_mean"],
+                "objective_value": baseline_summary["objective_value"],
+                "distance_penalty": baseline_summary["distance_penalty"],
+                "Density": baseline_summary["Density"],
+                "Fer_N": baseline_summary["Fer_N"],
+                "Fer_P": baseline_summary["Fer_P"],
+                "Fer_K": baseline_summary["Fer_K"],
+                "Fer_Count": baseline_summary["Fer_Count"],
+                "Pest_Count": baseline_summary["Pest_Count"],
+                "Sow_DOY": baseline_summary["Sow_DOY"],
+                "Irr_Count": baseline_summary["Irr_Count"],
+                "Irr_Elec": baseline_summary["Irr_Elec"],
+                "Pest_Cost": baseline_summary["Pest_Cost"],
+                "result_type": BASELINE_RESULT_TYPE,
+                "irrigation_mode": np.nan,
+                "irrigation_label": BASELINE_RESULT_TYPE,
+            },
+            {
+                "region_code": int(region_code),
+                "region_name": region_name,
+                "yield_value": best_row["yield_mean"],
+                "yield_mean": best_row["yield_mean"],
+                "yield_q25": best_row["yield_q25"],
+                "yield_q75": best_row["yield_q75"],
+                "profit_value": best_row["profit_mean"],
+                "input_cost": best_row["input_cost_mean"],
+                "objective_value": best_row["objective_value"],
+                "distance_penalty": best_row["distance_penalty"],
+                "Density": best_row["Density"],
+                "Fer_N": best_row["Fer_N"],
+                "Fer_P": best_row["Fer_P"],
+                "Fer_K": best_row["Fer_K"],
+                "Fer_Count": best_row["Fer_Count"],
+                "Pest_Count": best_row["Pest_Count"],
+                "Sow_DOY": best_row["Sow_DOY"],
+                "Irr_Count": best_row["Irr_Count"],
+                "Irr_Elec": best_row["Irr_Elec"],
+                "Pest_Cost": best_row["Pest_Cost"],
+                "result_type": OPTIMAL_YIELD_RESULT_TYPE,
+                "irrigation_mode": best_row["irrigation_mode"],
+                "irrigation_label": best_row["irrigation_label"],
+            },
         ]
     )
     numeric_cols = [column for column in FINAL_RESULT_COLUMNS if column not in {
@@ -999,7 +990,6 @@ def export_region_results(region_results_df: pd.DataFrame, export_dir: Path) -> 
         {
             BASELINE_RESULT_TYPE: 0,
             OPTIMAL_YIELD_RESULT_TYPE: 1,
-            NO_OBJECTIVE_IMPROVEMENT_RESULT_TYPE: 1,
         }
     )
     ordered_df = ordered_df.sort_values(["region_code", "sort_order"]).drop(columns=["sort_order"])
