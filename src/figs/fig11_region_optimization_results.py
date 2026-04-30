@@ -15,12 +15,12 @@ DEFAULT_SUMMARY_OUTPUT = ROOT / "fig" / "fig11_region_optimization_summary.csv"
 
 SCENARIO_LABELS = {
     "Baseline median": "Baseline",
-    "Optimal yield": "Optimal yield",
+    "Optimal yield": "Max-yield strategy",
 }
 
 SCENARIO_COLORS = {
     "Baseline": "#A5B1BD",
-    "Optimal yield": "#3E6B89",
+    "Max-yield strategy": "#3E6B89",
 }
 
 REGION_ORDER = ["Hebei", "Shandong"]
@@ -36,19 +36,19 @@ PANEL_FONT_SIZE = 22
 BAR_SPECS = [
     {
         "column": "yield_value",
-        "label": "Yield (kg/ha)",
+        "label": "Grain yield (kg ha$^{-1}$)",
         "summary_prefix": "yield",
         "tag": "(a)",
     },
     {
         "column": "profit_value",
-        "label": "Profit (CNY/ha)",
+        "label": "Net profit (CNY ha$^{-1}$)",
         "summary_prefix": "profit",
         "tag": "(b)",
     },
     {
         "column": "input_cost",
-        "label": "Input cost (CNY/ha)",
+        "label": "Production input cost (CNY ha$^{-1}$)",
         "summary_prefix": "input_cost",
         "tag": "(c)",
     },
@@ -121,7 +121,7 @@ def build_summary_table(baseline_df: pd.DataFrame) -> pd.DataFrame:
         column = spec["column"]
         prefix = spec["summary_prefix"]
         baseline_values = baseline_pivot[column]["Baseline"].reindex(REGION_ORDER)
-        optimal_values = baseline_pivot[column]["Optimal yield"].reindex(REGION_ORDER)
+        optimal_values = baseline_pivot[column]["Max-yield strategy"].reindex(REGION_ORDER)
         diff_values = optimal_values - baseline_values
         pct_values = np.where(baseline_values != 0, diff_values / baseline_values * 100.0, np.nan)
         summary[f"{prefix}_baseline"] = baseline_values.to_numpy(dtype=float)
@@ -170,7 +170,7 @@ def plot_grouped_bars(ax: plt.Axes, df: pd.DataFrame, column: str, y_label: str,
         .to_numpy(dtype=float)
     )
     optimal_values = (
-        df.loc[df["scenario"] == "Optimal yield", ["region_name", column]]
+        df.loc[df["scenario"] == "Max-yield strategy", ["region_name", column]]
         .set_index("region_name")[column]
         .reindex(labels)
         .to_numpy(dtype=float)
@@ -189,10 +189,10 @@ def plot_grouped_bars(ax: plt.Axes, df: pd.DataFrame, column: str, y_label: str,
         x + width / 2,
         optimal_values,
         width=width,
-        color=SCENARIO_COLORS["Optimal yield"],
+        color=SCENARIO_COLORS["Max-yield strategy"],
         edgecolor="black",
         linewidth=0.8,
-        label="Optimal yield",
+        label="Max-yield strategy",
     )
 
     y_max = float(np.nanmax(np.concatenate([baseline_values, optimal_values])))
@@ -215,7 +215,7 @@ def plot_grouped_bars(ax: plt.Axes, df: pd.DataFrame, column: str, y_label: str,
     ax.set_ylabel(y_label)
     ax.set_ylim(0, y_max * 1.26 if y_max > 0 else 1.0)
     style_axis(ax)
-    ax.legend(frameon=False, loc=(0.57, 0.86))
+    ax.legend(frameon=False, loc=(0.47, 0.86))
     add_panel_tag(ax, tag)
 
 

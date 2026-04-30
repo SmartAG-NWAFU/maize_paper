@@ -205,7 +205,7 @@ def main() -> None:
 
     fig, axes = plt.subplots(1, 2, figsize=(13.3, 5.8), constrained_layout=True)
     plot_boxplot(axes[0], df, "sowing_day_of_year", "Sowing date (DOY)", "(a)")
-    plot_boxplot(axes[1], df, "measured_density", "Plant density (plants/ha)", "(b)")
+    plot_boxplot(axes[1], df, "measured_density", "Plant density (plants ha$^{-1}$)", "(b)")
     fig.savefig(args.output)
     plt.close(fig)
 

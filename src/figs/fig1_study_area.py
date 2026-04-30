@@ -30,8 +30,8 @@ NCP_SHP = ROOT / "data" / "china_shp" / "ncp.shp"
 MAIZE_RASTER = ROOT / "data" / "china_shp" / "maize_map" / "china-maize-2024-WGS84-v1-mosaic_albers_1000m_average.tif"
 
 REGION_STYLE = {
-    "shandong": {"label": "Shandong", "color": "#f28e2b", "china_label_offset": (28, -10)},
     "hebei": {"label": "Hebei", "color": "#4e79a7", "china_label_offset": (-22, 14)},
+    "shandong": {"label": "Shandong", "color": "#f28e2b", "china_label_offset": (28, -10)},
 }
 
 BASE_FONT_SIZE = 16
@@ -46,7 +46,7 @@ SOUTH_CHINA_SEA_LONLAT_BOUNDS = (105.0, 125.0, 3.0, 25.0)
 CHINA_OVERVIEW_LONLAT_BOUNDS = (73.0, 135.5, 17.0, 54.5)
 OVERVIEW_LABEL_SIZE = 26
 OVERVIEW_ROMAN_SIZE = 30
-SOUTH_CHINA_SEA_INSET_POS = (0.835, 0.0, 0.18, 0.30)
+SOUTH_CHINA_SEA_INSET_POS = (0.8315, 0.0, 0.18, 0.30)
 WEB_MERCATOR_CRS = "EPSG:3857"
 MAIZE_RASTER_MAX_DIMENSION = 3600
 MAIZE_MIN_FRACTION = 0.001
@@ -58,6 +58,7 @@ NCP_EDGE_COLOR = "#145a42"
 NCP_EDGE_LINEWIDTH = 3.5
 CHINA_PANEL_FACE_COLOR = "#edf3f0"
 CHINA_PANEL_HEIGHT_RATIO = 1.15
+OVERVIEW_LEGEND_SIZE = 17
 
 
 def parse_args() -> argparse.Namespace:
@@ -237,6 +238,25 @@ def expand_bounds(bounds: tuple[float, float, float, float], padding_ratio: floa
     pad_x = max(dx * padding_ratio, 5000)
     pad_y = max(dy * padding_ratio, 5000)
     return minx - pad_x, maxx + pad_x, miny - pad_y, maxy + pad_y
+
+
+def match_bounds_aspect(
+    bounds: tuple[float, float, float, float],
+    target_aspect: float,
+) -> tuple[float, float, float, float]:
+    minx, maxx, miny, maxy = bounds
+    width = maxx - minx
+    height = maxy - miny
+    current_aspect = width / height
+
+    if current_aspect > target_aspect:
+        new_height = width / target_aspect
+        pad = (new_height - height) / 2
+        return minx, maxx, miny - pad, maxy + pad
+
+    new_width = height * target_aspect
+    pad = (new_width - width) / 2
+    return minx - pad, maxx + pad, miny, maxy
 
 
 def lonlat_bounds_to_3857(bounds: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
@@ -448,7 +468,20 @@ def add_overview_ticks(ax: plt.Axes, bounds_3857: tuple[float, float, float, flo
 
 
 def choose_scale_length(width_m: float) -> int:
-    candidates = [500, 1000, 2000, 5000, 10000, 20000, 25000, 50000, 100000]
+    candidates = [
+        500,
+        1000,
+        2000,
+        5000,
+        10000,
+        20000,
+        25000,
+        50000,
+        100000,
+        200000,
+        500000,
+        1000000,
+    ]
     target = width_m * 0.18
     valid = [value for value in candidates if value <= target]
     return valid[-1] if valid else candidates[0]
@@ -460,8 +493,8 @@ def add_scale_bar(ax: plt.Axes, bounds_3857: tuple[float, float, float, float]) 
     height_m = maxy - miny
     scale_length = choose_scale_length(width_m)
 
-    x0 = minx + width_m * 0.08
-    y0 = miny + height_m * 0.08
+    x0 = minx + width_m * 0.06
+    y0 = miny + height_m * 0.07
     bar_height = height_m * 0.010
     half_length = scale_length / 2
 
@@ -555,7 +588,7 @@ def add_overview_north_arrow(ax: plt.Axes, bounds_3857: tuple[float, float, floa
     width = maxx - minx
     height = maxy - miny
 
-    x = maxx - width * 0.06
+    x = maxx - width * 0.03
     y = maxy - height * 0.18
     h = height * 0.11
     w = width * 0.016
@@ -574,6 +607,35 @@ def add_overview_north_arrow(ax: plt.Axes, bounds_3857: tuple[float, float, floa
     ax.text(x, y + h * 1.08, "N", ha="center", va="bottom", fontsize=NORTH_ARROW_FONT_SIZE + 2, color="black", zorder=10)
 
 
+def add_overview_legend(ax: plt.Axes) -> None:
+    handles = [
+        patches.Patch(
+            facecolor=MAIZE_RGB,
+            edgecolor="none",
+            alpha=0.72,
+            label="Maize planting area",
+        ),
+        patches.Patch(
+            facecolor=NCP_FACE_COLOR,
+            edgecolor=NCP_EDGE_COLOR,
+            linewidth=2.0,
+            alpha=0.35,
+            label="North China Plain",
+        ),
+    ]
+    legend = ax.legend(
+        handles=handles,
+        loc="lower left",
+        bbox_to_anchor=(0.025, 0.075),
+        frameon=False,
+        fontsize=OVERVIEW_LEGEND_SIZE,
+        handlelength=1.6,
+        handleheight=1.0,
+        labelspacing=0.45,
+    )
+    legend.set_zorder(11)
+
+
 def add_panel_label(ax: plt.Axes, text: str) -> None:
     panel_text = ax.text(
         0.02,
@@ -588,6 +650,36 @@ def add_panel_label(ax: plt.Axes, text: str) -> None:
         zorder=9,
     )
     panel_text.set_path_effects([pe.withStroke(linewidth=2.2, foreground="black", alpha=0.8)])
+
+
+def add_panel_connector_arrows(
+    fig: plt.Figure,
+    china_ax: plt.Axes,
+    region_axes: list[plt.Axes],
+    points: gpd.GeoDataFrame,
+    region_order: list[str],
+) -> None:
+    for ax, region in zip(region_axes, region_order):
+        group = points.loc[points["region"] == region]
+        if group.empty:
+            continue
+
+        centroid = group_centroid(group)
+        connector = patches.ConnectionPatch(
+            xyA=(centroid.x, centroid.y),
+            coordsA=china_ax.transData,
+            xyB=(0.5, 1.02),
+            coordsB=ax.transAxes,
+            arrowstyle="->",
+            mutation_scale=24,
+            linewidth=2.2,
+            color="black",
+            shrinkA=10,
+            shrinkB=8,
+            zorder=12,
+            clip_on=False,
+        )
+        fig.add_artist(connector)
 
 
 def add_south_china_sea_inset(ax: plt.Axes, china: gpd.GeoDataFrame) -> None:
@@ -628,17 +720,27 @@ def plot_china_panel(
         style = REGION_STYLE.get(region, {"label": region.title(), "color": "#f2a81d"})
         group.plot(
             ax=ax,
-            markersize=32,
+            markersize=78,
+            color="black",
+            edgecolor="none",
+            alpha=0.90,
+            zorder=5.9,
+        )
+        group.plot(
+            ax=ax,
+            markersize=48,
             color=style["color"],
             edgecolor="white",
-            linewidth=0.35,
-            alpha=0.95,
-            zorder=6,
+            linewidth=1.15,
+            alpha=1.0,
+            zorder=6.2,
         )
 
     add_south_china_sea_inset(ax, china)
     add_overview_ticks(ax, bounds_3857)
     add_overview_north_arrow(ax, bounds_3857)
+    add_scale_bar(ax, bounds_3857)
+    add_overview_legend(ax)
 
     ax.set_aspect("auto")
     ax.set_xlabel("")
@@ -656,10 +758,11 @@ def plot_region_panel(
     label_top_n: int,
     tianditu_key: str,
     idx: int,
+    target_aspect: float,
     ) -> None:
     _ = idx
     style = REGION_STYLE.get(region, {"label": region.title(), "color": "#e15759"})
-    minx, maxx, miny, maxy = expand_bounds(tuple(group.total_bounds), padding_ratio=0.18)
+    minx, maxx, miny, maxy = match_bounds_aspect(expand_bounds(tuple(group.total_bounds), padding_ratio=0.18), target_aspect)
     bounds_3857 = (minx, maxx, miny, maxy)
 
     ax.set_xlim(minx, maxx)
@@ -676,7 +779,7 @@ def plot_region_panel(
         zorder=4,
     )
     add_point_labels(ax, group, label_top_n)
-    lat_step = 0.2 if idx == 0 else 0.04 if idx == 1 else None
+    lat_step = 0.04 if region == "hebei" else 0.2 if region == "shandong" else None
     add_lon_lat_ticks(ax, bounds_3857, lat_step=lat_step)
     add_scale_bar(ax, bounds_3857)
     if idx == 1:
@@ -720,9 +823,11 @@ def plot_map(points: gpd.GeoDataFrame, output_path: Path, zoom: int, label_top_n
         region: expand_bounds(tuple(points.loc[points["region"] == region].total_bounds), padding_ratio=0.18)
         for region in region_order
     }
+    region_aspects = [(bounds[1] - bounds[0]) / (bounds[3] - bounds[2]) for bounds in region_bounds.values()]
+    region_panel_aspect = min(region_aspects)
 
     fig = plt.figure(figsize=(16.8, 11.9), dpi=300)
-    gs = GridSpec(2, 2, figure=fig, height_ratios=[CHINA_PANEL_HEIGHT_RATIO, 1.0], hspace=0.02, wspace=0.012)
+    gs = GridSpec(2, 2, figure=fig, height_ratios=[CHINA_PANEL_HEIGHT_RATIO, 1.0], hspace=0.02, wspace=0.035)
 
     china_ax = fig.add_subplot(gs[0, :])
     plot_china_panel(china_ax, points, region_bounds=region_bounds)
@@ -733,7 +838,16 @@ def plot_map(points: gpd.GeoDataFrame, output_path: Path, zoom: int, label_top_n
     for idx, (ax, region) in enumerate(zip(axes, region_order)):
         group = points.loc[points["region"] == region].copy()
         region_label = REGION_STYLE.get(region, {"label": region.title()})["label"]
-        plot_region_panel(ax=ax, region=region, group=group, zoom=zoom, label_top_n=label_top_n, tianditu_key=tianditu_key, idx=idx)
+        plot_region_panel(
+            ax=ax,
+            region=region,
+            group=group,
+            zoom=zoom,
+            label_top_n=label_top_n,
+            tianditu_key=tianditu_key,
+            idx=idx,
+            target_aspect=region_panel_aspect,
+        )
         add_panel_label(ax, f"({chr(98 + idx)}) {region_label}")
         if idx > 0:
             ax.set_ylabel("")
@@ -746,6 +860,7 @@ def plot_map(points: gpd.GeoDataFrame, output_path: Path, zoom: int, label_top_n
     left_pos = axes[0].get_position()
     right_pos = axes[1].get_position()
     china_ax.set_position([left_pos.x0, china_pos.y0, right_pos.x1 - left_pos.x0, china_pos.height])
+    add_panel_connector_arrows(fig, china_ax, axes[: len(region_order)], points, region_order)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=300)

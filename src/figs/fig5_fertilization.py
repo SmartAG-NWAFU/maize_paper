@@ -33,25 +33,25 @@ PANEL_FONT_SIZE = 22
 VARIABLE_SPECS = [
     {
         "column": "Fer_Count",
-        "label": "Fertilization events",
+        "label": "Fertilization frequency",
         "summary_prefix": "fert_count",
         "tag": "(a)",
     },
     {
         "column": "Fer_N",
-        "label": "N amount (kg/ha)",
+        "label": "N amount (kg ha$^{-1}$)",
         "summary_prefix": "n",
         "tag": "(b)",
     },
     {
         "column": "Fer_P",
-        "label": "P amount (kg/ha)",
+        "label": "P amount (kg ha$^{-1}$)",
         "summary_prefix": "p",
         "tag": "(c)",
     },
     {
         "column": "Fer_K",
-        "label": "K amount (kg/ha)",
+        "label": "K amount (kg ha$^{-1}$)",
         "summary_prefix": "k",
         "tag": "(d)",
     },

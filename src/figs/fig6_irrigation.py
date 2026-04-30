@@ -35,20 +35,20 @@ LEGEND_FONT_SIZE = 19
 VARIABLE_SPECS = [
     {
         "column": "Irr_Count",
-        "label": "Irrigation events",
+        "label": "Irrigation frequency",
         "summary_prefix": "irr_count",
         "tag": "(a)",
     },
     {
         "column": "Irr_Elec",
-        "label": "Irrigation electricity usage (kWh/ha)",
+        "label": "Irrigation electricity usage (kWh ha$^{-1}$)",
         "summary_prefix": "irr_elec",
         "tag": "(b)",
     },
 ]
 
 FACILITY_SPECS = [
-    ("Irr_None", "No irrigation"),
+    ("Irr_None", "Rainfed"),
     ("Irr_Flood", "Flood"),
     ("Irr_Sprinkler", "Sprinkler"),
     ("Irr_Drip", "Drip"),

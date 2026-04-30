@@ -205,8 +205,8 @@ def main() -> None:
     summary.to_csv(args.summary_output, index=False, encoding="utf-8-sig")
 
     fig, axes = plt.subplots(1, 2, figsize=(13.3, 5.8), constrained_layout=True)
-    plot_boxplot(axes[0], df, "pest_count", "Pesticide applications", "(a)")
-    plot_boxplot(axes[1], df, "pest_cost", "Pesticide cost (CNY/ha)", "(b)")
+    plot_boxplot(axes[0], df, "pest_count", "Pesticide application frequency", "(a)")
+    plot_boxplot(axes[1], df, "pest_cost", "Pesticide cost (CNY ha$^{-1}$)", "(b)")
     fig.savefig(args.output)
     plt.close(fig)
 

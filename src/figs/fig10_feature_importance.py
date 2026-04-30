@@ -12,27 +12,27 @@ DEFAULT_OUTPUT_ROOT = ROOT / "outputs" / "model_outputs_fixed"
 DEFAULT_OUTPUT = ROOT / "fig" / "fig10_xgboost_feature_importance.png"
 
 FEATURE_LABELS = {
-    "Irr_Drip": "Irrigation = Drip",
-    "Irr_Sprinkler": "Irrigation = Sprinkler",
-    "Irr_None": "Irrigation = None",
-    "Irr_Flood": "Irrigation = Flood",
+    "Irr_Drip": "Drip irrigation",
+    "Irr_Sprinkler": "Sprinkler irrigation",
+    "Irr_None": "Rainfed",
+    "Irr_Flood": "Flood irrigation",
     "Irr_Method": "Irrigation method",
-    "RH": "Relative humidity",
-    "Irr_Elec": "Irrigation electricity",
+    "RH": "Mean relative humidity",
+    "Irr_Elec": "Irrigation electricity usage",
     "Density": "Plant density",
-    "Pest_Cost": "Pesticide cost",
-    "Fer_K": "Total K",
-    "Rad": "Radiation",
-    "Precip": "Precipitation",
-    "Fer_P": "Total P",
-    "Fer_N": "Total N",
-    "Sow_DOY": "Sowing day of year",
+    "Pest_Cost": "Pesticide input cost",
+    "Fer_K": "K application rate",
+    "Rad": "Total radiation",
+    "Precip": "Total precipitation",
+    "Fer_P": "P amount",
+    "Fer_N": "N amount",
+    "Sow_DOY": "Sowing date",
     "Region": "Region",
-    "Irr_Count": "Irrigation count",
-    "Pest_Count": "Pesticide count",
-    "Wind": "Wind speed",
-    "Lodging": "Lodging",
-    "Fer_Count": "Fertilization count",
+    "Irr_Count": "Irrigation frequency",
+    "Pest_Count": "Pesticide application frequency",
+    "Wind": "Max windspeed",
+    "Lodging": "Lodging rate",
+    "Fer_Count": "Fertilization frequency",
 }
 
 BASE_FONT_SIZE = 19
@@ -110,8 +110,8 @@ def plot_feature_importance(importance_df: pd.DataFrame, output_path: Path) -> N
         edgecolor="black",
         linewidth=0.8,
     )
-    ax.set_xlabel("Importance")
-    ax.set_ylabel("Feature")
+    ax.set_xlabel("Relative importance")
+    ax.set_ylabel("Predictor")
     style_axis(ax)
 
     xmax = float(importance_df["importance"].max())

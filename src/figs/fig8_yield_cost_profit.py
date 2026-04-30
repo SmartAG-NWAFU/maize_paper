@@ -38,19 +38,19 @@ SCATTER_LEGEND_FONT_SIZE = 14
 VARIABLE_SPECS = [
     {
         "column": "yield_ha",
-        "label": "Yield (kg/ha)",
+        "label": "Yield (kg ha$^{-1}$)",
         "summary_prefix": "yield",
         "tag": "(a)",
     },
     {
         "column": "cost_ha",
-        "label": "Cost (CNY/ha)",
+        "label": "Total cost (CNY ha$^{-1}$)",
         "summary_prefix": "cost",
         "tag": "(b)",
     },
     {
         "column": "profit_ha",
-        "label": "Profit (CNY/ha)",
+        "label": "Profit (CNY ha$^{-1}$)",
         "summary_prefix": "profit",
         "tag": "(c)",
     },
@@ -273,8 +273,8 @@ def plot_yield_profit_scatter(ax: plt.Axes, df: pd.DataFrame) -> None:
 
     style_axis(ax)
     add_panel_tag(ax, "(d)")
-    ax.set_xlabel("Cost (CNY/ha)")
-    ax.set_ylabel("Yield (kg/ha)")
+    ax.set_xlabel("Cost (CNY ha$^{-1}$)")
+    ax.set_ylabel("Yield (kg ha$^{-1}$)")
 
     region_handles = [
         Line2D(
