@@ -1,5 +1,5 @@
-﻿region_code,region_name,yield_value,yield_mean,yield_q25,yield_q75,profit_value,input_cost,objective_value,distance_penalty,Density,Fer_N,Fer_P,Fer_K,Fer_Count,Pest_Count,Sow_DOY,Irr_Count,Irr_Elec,Pest_Cost,result_type,irrigation_mode,irrigation_label
-0,Hebei,9585.0,9516.79,8362.69,10138.09,4081.4,19324.42,9585.0,0.0,55275.0,189.0,40.5,55.88,1.0,2.0,167.5,1.0,329.33,530.92,Baseline median,,Baseline median
-0,Hebei,11568.2,11580.15,11510.03,11575.79,7822.25,19896.95,10143.7,2.85,61500.0,210.0,55.0,70.0,1.0,2.0,164.0,2.0,250.0,650.0,Optimal yield,Sprinkler,喷灌
-1,Shandong,10721.85,10634.52,9032.62,11755.35,6178.56,19275.0,10721.85,0.0,67005.0,217.5,75.0,85.93,1.0,2.0,169.0,1.0,300.0,255.0,Baseline median,,Baseline median
-1,Shandong,12554.02,12508.31,12128.86,12897.45,10737.03,20023.6,12241.3,0.63,63500.0,215.0,75.0,85.0,2.0,2.0,161.0,2.0,650.0,300.0,Optimal yield,Drip,滴灌
+﻿region_code,region_name,yield_value,yield_mean,yield_q25,yield_q75,profit_value,input_cost,objective_value,distance_penalty,yield_uncertainty_penalty,yield_cap_penalty,profit_cap_penalty,Density,Fer_N,Fer_P,Fer_K,Fer_Count,Pest_Count,Sow_DOY,Irr_Count,Irr_Elec,Pest_Cost,result_type,irrigation_mode,irrigation_label
+0,Hebei,9585.0,9516.79,8362.69,10138.09,4081.4,19324.42,9035.25,0.0,549.75,0.0,0.0,55275.0,189.0,40.5,55.88,1.0,2.0,167.5,1.0,329.33,530.92,Baseline median,,Baseline median
+0,Hebei,11173.62,11261.98,11112.77,11337.5,6097.72,20718.97,9704.26,2.94,97.82,0.0,0.0,62000.0,205.0,40.0,75.0,1.0,2.0,167.0,2.0,450.0,700.0,Optimal yield,Drip,滴灌
+1,Shandong,10721.85,10634.52,9032.62,11755.35,6178.56,19275.0,9680.89,0.0,1040.96,0.0,0.0,67005.0,217.5,75.0,85.93,1.0,2.0,169.0,1.0,300.0,255.0,Baseline median,,Baseline median
+1,Shandong,12217.75,12432.87,12060.2,12803.65,9256.7,20065.91,11920.84,0.59,249.31,0.0,0.0,64000.0,225.0,75.0,90.0,2.0,2.0,161.0,2.0,600.0,300.0,Optimal yield,Drip,滴灌

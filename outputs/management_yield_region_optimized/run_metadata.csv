@@ -1,2 +1,2 @@
-﻿resolved_model_path,aggregation,random_state,maxiter,popsize,lower_quantile,upper_quantile,distance_penalty_weight,distance_neighbor_k
-D:\workspace\papers\maize_paper\outputs\model_outputs_fixed\xgboost\model.pkl,median,42,120,12,0.05,0.95,500,5
+﻿resolved_model_path,aggregation,random_state,maxiter,popsize,lower_quantile,upper_quantile,distance_penalty_weight,distance_neighbor_k,yield_risk_penalty,max_yield_improvement_pct,max_profit_improvement_pct,improvement_cap_penalty_weight
+D:\workspace\papers\maize_paper\outputs\model_outputs_fixed\xgboost\model.pkl,median,42,120,12,0.05,0.95,500,5,0.5,20.0,50.0,500.0

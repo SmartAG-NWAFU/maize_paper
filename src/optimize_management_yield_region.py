@@ -28,6 +28,10 @@ DEFAULT_LOWER_QUANTILE = 0.05
 DEFAULT_UPPER_QUANTILE = 0.95
 DEFAULT_DISTANCE_PENALTY_WEIGHT = 500
 DEFAULT_DISTANCE_NEIGHBOR_K = 5
+DEFAULT_YIELD_RISK_PENALTY = 0.5
+DEFAULT_MAX_YIELD_IMPROVEMENT_PCT = 20.0
+DEFAULT_MAX_PROFIT_IMPROVEMENT_PCT = 50.0
+DEFAULT_IMPROVEMENT_CAP_PENALTY_WEIGHT = 500.0
 DECISION_VALUE_STEPS = {
     "Sow_DOY": 1.0,
     "Density": 500.0,
@@ -71,6 +75,9 @@ FINAL_RESULT_COLUMNS = [
     "input_cost",
     "objective_value",
     "distance_penalty",
+    "yield_uncertainty_penalty",
+    "yield_cap_penalty",
+    "profit_cap_penalty",
     "Density",
     "Fer_N",
     "Fer_P",
@@ -139,6 +146,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--upper-quantile", type=float, default=DEFAULT_UPPER_QUANTILE)
     parser.add_argument("--distance-penalty-weight", type=float, default=DEFAULT_DISTANCE_PENALTY_WEIGHT)
     parser.add_argument("--distance-neighbor-k", type=int, default=DEFAULT_DISTANCE_NEIGHBOR_K)
+    parser.add_argument("--yield-risk-penalty", type=float, default=DEFAULT_YIELD_RISK_PENALTY)
+    parser.add_argument("--max-yield-improvement-pct", type=float, default=DEFAULT_MAX_YIELD_IMPROVEMENT_PCT)
+    parser.add_argument("--max-profit-improvement-pct", type=float, default=DEFAULT_MAX_PROFIT_IMPROVEMENT_PCT)
+    parser.add_argument("--improvement-cap-penalty-weight", type=float, default=DEFAULT_IMPROVEMENT_CAP_PENALTY_WEIGHT)
     parser.add_argument("--allow-unseen-irrigation-modes", action="store_true")
     return parser.parse_args()
 
@@ -385,10 +396,15 @@ def build_decision_space(
     irrigation_mode: str,
     lower_quantile: float,
     upper_quantile: float,
+    max_sow_doy: float,
 ) -> tuple[list[str], list[tuple[float, float]]]:
     decision_columns = ["Sow_DOY", "Density", "Fer_N", "Fer_P", "Fer_K", "Pest_Cost"]
+    sow_lower_bound, sow_upper_bound = quantile_bounds(region_df["Sow_DOY"], lower_quantile, upper_quantile)
+    sow_upper_bound = min(sow_upper_bound, float(max_sow_doy))
+    if sow_lower_bound > sow_upper_bound:
+        sow_lower_bound = sow_upper_bound
     bounds = [
-        quantile_bounds(region_df["Sow_DOY"], lower_quantile, upper_quantile),
+        (sow_lower_bound, sow_upper_bound),
         quantile_bounds(region_df["Density"], lower_quantile, upper_quantile),
         quantile_bounds(region_df["Fer_N"], lower_quantile, upper_quantile),
         quantile_bounds(region_df["Fer_P"], lower_quantile, upper_quantile),
@@ -616,6 +632,17 @@ def aggregate_yield(values: np.ndarray, aggregation: str) -> float:
     return float(np.median(values))
 
 
+def improvement_cap_penalty(
+    value: float,
+    cap_value: float,
+    penalty_weight: float,
+) -> float:
+    if cap_value <= 0:
+        return 0.0
+    exceed_pct = max(0.0, (float(value) / float(cap_value) - 1.0) * 100.0)
+    return float(penalty_weight * exceed_pct)
+
+
 def evaluate_region_management(
     region_df: pd.DataFrame,
     model,
@@ -631,6 +658,10 @@ def evaluate_region_management(
     aggregation: str,
     distance_penalty_weight: float,
     distance_neighbor_k: int,
+    yield_risk_penalty: float,
+    max_yield_value: float,
+    max_profit_value: float,
+    improvement_cap_penalty_weight: float,
 ) -> dict[str, float | int | str]:
     counts = infer_management_counts(
         irrigation_mode=str(irrigation_scenario["mode_key"]),
@@ -665,24 +696,50 @@ def evaluate_region_management(
     )
     predicted_profit = predicted_yield * grain_price - estimated_cost
 
+    yield_median = float(np.median(predicted_yield))
+    profit_median = float(np.median(predicted_profit))
     raw_objective = aggregate_yield(predicted_yield, aggregation)
+    yield_uncertainty_penalty = float(yield_risk_penalty * np.std(predicted_yield, ddof=0))
+    conservative_yield_median = yield_median - yield_uncertainty_penalty
+    conservative_profit_median = conservative_yield_median * grain_price - float(np.median(estimated_cost))
+    yield_cap_penalty = improvement_cap_penalty(
+        value=conservative_yield_median,
+        cap_value=max_yield_value,
+        penalty_weight=improvement_cap_penalty_weight,
+    )
+    profit_cap_penalty = improvement_cap_penalty(
+        value=conservative_profit_median,
+        cap_value=max_profit_value,
+        penalty_weight=improvement_cap_penalty_weight,
+    )
     distance_penalty = nearest_management_distance(
         region_df=region_df,
         irrigation_mode=str(irrigation_scenario["mode_key"]),
         direct_values=direct_values,
         neighbor_k=distance_neighbor_k,
     )
-    objective_value = raw_objective - distance_penalty_weight * distance_penalty
+    objective_value = (
+        raw_objective
+        - yield_uncertainty_penalty
+        - yield_cap_penalty
+        - profit_cap_penalty
+        - distance_penalty_weight * distance_penalty
+    )
 
     return {
-        "yield_median": float(np.median(predicted_yield)),
+        "yield_median": yield_median,
+        "conservative_yield_median": conservative_yield_median,
         "yield_mean": float(np.mean(predicted_yield)),
         "yield_q25": float(np.quantile(predicted_yield, 0.25)),
         "yield_q75": float(np.quantile(predicted_yield, 0.75)),
-        "profit_median": float(np.median(predicted_profit)),
+        "profit_median": profit_median,
+        "conservative_profit_median": conservative_profit_median,
         "input_cost_median": float(np.median(estimated_cost)),
         "raw_objective": raw_objective,
         "distance_penalty": float(distance_penalty),
+        "yield_uncertainty_penalty": yield_uncertainty_penalty,
+        "yield_cap_penalty": yield_cap_penalty,
+        "profit_cap_penalty": profit_cap_penalty,
         "objective_value": float(objective_value),
         "Density": float(direct_values["Density"]),
         "Fer_N": float(direct_values["Fer_N"]),
@@ -704,6 +761,7 @@ def build_baseline_summary(
     cost_df: pd.DataFrame,
     grain_price: float,
     aggregation: str,
+    yield_risk_penalty: float,
 ) -> dict[str, float]:
     cost_cols = get_cost_columns(cost_df)
     baseline_df = (
@@ -727,6 +785,9 @@ def build_baseline_summary(
         .copy()
     )
     baseline_df["profit"] = baseline_df["Yield"] * grain_price - baseline_df[cost_cols["total_cost"]]
+    baseline_yield = baseline_df["Yield"].to_numpy(dtype=float)
+    raw_objective = aggregate_yield(baseline_yield, aggregation)
+    yield_uncertainty_penalty = float(yield_risk_penalty * np.std(baseline_yield, ddof=0))
     return {
         "yield_median": float(baseline_df["Yield"].median()),
         "yield_mean": float(baseline_df["Yield"].mean()),
@@ -734,8 +795,11 @@ def build_baseline_summary(
         "yield_q75": float(baseline_df["Yield"].quantile(0.75)),
         "profit_median": float(baseline_df["profit"].median()),
         "input_cost_median": float(baseline_df[cost_cols["total_cost"]].median()),
-        "objective_value": aggregate_yield(baseline_df["Yield"].to_numpy(dtype=float), aggregation),
+        "objective_value": raw_objective - yield_uncertainty_penalty,
         "distance_penalty": 0.0,
+        "yield_uncertainty_penalty": yield_uncertainty_penalty,
+        "yield_cap_penalty": 0.0,
+        "profit_cap_penalty": 0.0,
         "Density": float(baseline_df["Density"].median()),
         "Fer_N": float(baseline_df["Fer_N"].median()),
         "Fer_P": float(baseline_df["Fer_P"].median()),
@@ -765,10 +829,24 @@ def optimize_region(
     upper_quantile: float,
     distance_penalty_weight: float,
     distance_neighbor_k: int,
+    yield_risk_penalty: float,
+    max_yield_improvement_pct: float,
+    max_profit_improvement_pct: float,
+    improvement_cap_penalty_weight: float,
     allow_unseen_irrigation_modes: bool,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     region_code = region_df["Region"].iloc[0]
     region_name = region_label(region_code)
+    baseline_summary = build_baseline_summary(
+        region_df,
+        region_cost_df,
+        grain_price,
+        aggregation,
+        yield_risk_penalty,
+    )
+    max_yield_value = baseline_summary["yield_median"] * (1.0 + max_yield_improvement_pct / 100.0)
+    max_profit_value = baseline_summary["profit_median"] * (1.0 + max_profit_improvement_pct / 100.0)
+    max_sow_doy = baseline_summary["Sow_DOY"]
     count_models = build_region_count_models(region_df)
     fer_count_model = count_models["fer_count_model"]
     pest_count_model = count_models["pest_count_model"]
@@ -795,6 +873,7 @@ def optimize_region(
             irrigation_mode=irrigation_mode,
             lower_quantile=lower_quantile,
             upper_quantile=upper_quantile,
+            max_sow_doy=max_sow_doy,
         )
 
         def objective(x: np.ndarray) -> float:
@@ -819,6 +898,10 @@ def optimize_region(
                 aggregation=aggregation,
                 distance_penalty_weight=distance_penalty_weight,
                 distance_neighbor_k=distance_neighbor_k,
+                yield_risk_penalty=yield_risk_penalty,
+                max_yield_value=max_yield_value,
+                max_profit_value=max_profit_value,
+                improvement_cap_penalty_weight=improvement_cap_penalty_weight,
             )
             return -float(evaluation["objective_value"])
 
@@ -853,6 +936,10 @@ def optimize_region(
             aggregation=aggregation,
             distance_penalty_weight=distance_penalty_weight,
             distance_neighbor_k=distance_neighbor_k,
+            yield_risk_penalty=yield_risk_penalty,
+            max_yield_value=max_yield_value,
+            max_profit_value=max_profit_value,
+            improvement_cap_penalty_weight=improvement_cap_penalty_weight,
         )
         best_evaluation.update(
             {
@@ -871,7 +958,6 @@ def optimize_region(
         ascending=[False, False],
     ).reset_index(drop=True)
 
-    baseline_summary = build_baseline_summary(region_df, region_cost_df, grain_price, aggregation)
     best_row = mode_results_df.iloc[0]
     use_best_candidate = float(best_row["objective_value"]) > float(baseline_summary["objective_value"])
 
@@ -886,6 +972,9 @@ def optimize_region(
         "input_cost": baseline_summary["input_cost_median"],
         "objective_value": baseline_summary["objective_value"],
         "distance_penalty": baseline_summary["distance_penalty"],
+        "yield_uncertainty_penalty": baseline_summary["yield_uncertainty_penalty"],
+        "yield_cap_penalty": baseline_summary["yield_cap_penalty"],
+        "profit_cap_penalty": baseline_summary["profit_cap_penalty"],
         "Density": baseline_summary["Density"],
         "Fer_N": baseline_summary["Fer_N"],
         "Fer_P": baseline_summary["Fer_P"],
@@ -904,14 +993,17 @@ def optimize_region(
         {
             "region_code": int(region_code),
             "region_name": region_name,
-            "yield_value": best_row["yield_median"],
+            "yield_value": best_row["conservative_yield_median"],
             "yield_mean": best_row["yield_mean"],
             "yield_q25": best_row["yield_q25"],
             "yield_q75": best_row["yield_q75"],
-            "profit_value": best_row["profit_median"],
+            "profit_value": best_row["conservative_profit_median"],
             "input_cost": best_row["input_cost_median"],
             "objective_value": best_row["objective_value"],
             "distance_penalty": best_row["distance_penalty"],
+            "yield_uncertainty_penalty": best_row["yield_uncertainty_penalty"],
+            "yield_cap_penalty": best_row["yield_cap_penalty"],
+            "profit_cap_penalty": best_row["profit_cap_penalty"],
             "Density": best_row["Density"],
             "Fer_N": best_row["Fer_N"],
             "Fer_P": best_row["Fer_P"],
@@ -967,6 +1059,10 @@ def build_region_results(
     upper_quantile: float,
     distance_penalty_weight: float,
     distance_neighbor_k: int,
+    yield_risk_penalty: float,
+    max_yield_improvement_pct: float,
+    max_profit_improvement_pct: float,
+    improvement_cap_penalty_weight: float,
     allow_unseen_irrigation_modes: bool,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     selected_region_frames: list[pd.DataFrame] = []
@@ -992,6 +1088,10 @@ def build_region_results(
             upper_quantile=upper_quantile,
             distance_penalty_weight=distance_penalty_weight,
             distance_neighbor_k=distance_neighbor_k,
+            yield_risk_penalty=yield_risk_penalty,
+            max_yield_improvement_pct=max_yield_improvement_pct,
+            max_profit_improvement_pct=max_profit_improvement_pct,
+            improvement_cap_penalty_weight=improvement_cap_penalty_weight,
             allow_unseen_irrigation_modes=allow_unseen_irrigation_modes,
         )
         selected_region_frames.append(selected_rows_df)
@@ -1049,6 +1149,10 @@ def export_run_metadata(
     upper_quantile: float,
     distance_penalty_weight: float,
     distance_neighbor_k: int,
+    yield_risk_penalty: float,
+    max_yield_improvement_pct: float,
+    max_profit_improvement_pct: float,
+    improvement_cap_penalty_weight: float,
 ) -> None:
     metadata_df = pd.DataFrame(
         [
@@ -1062,6 +1166,10 @@ def export_run_metadata(
                 "upper_quantile": upper_quantile,
                 "distance_penalty_weight": distance_penalty_weight,
                 "distance_neighbor_k": distance_neighbor_k,
+                "yield_risk_penalty": yield_risk_penalty,
+                "max_yield_improvement_pct": max_yield_improvement_pct,
+                "max_profit_improvement_pct": max_profit_improvement_pct,
+                "improvement_cap_penalty_weight": improvement_cap_penalty_weight,
             }
         ]
     )
@@ -1156,6 +1264,14 @@ def main() -> None:
         raise ValueError("Quantile bounds must satisfy 0 <= lower < upper <= 1.")
     if args.distance_neighbor_k <= 0:
         raise ValueError("distance_neighbor_k must be a positive integer.")
+    if args.yield_risk_penalty < 0:
+        raise ValueError("yield_risk_penalty must be non-negative.")
+    if args.max_yield_improvement_pct < 0:
+        raise ValueError("max_yield_improvement_pct must be non-negative.")
+    if args.max_profit_improvement_pct < 0:
+        raise ValueError("max_profit_improvement_pct must be non-negative.")
+    if args.improvement_cap_penalty_weight < 0:
+        raise ValueError("improvement_cap_penalty_weight must be non-negative.")
 
     model_df, cost_df, model, features, resolved_model_path = load_inputs(
         model_data_path=args.model_data_path,
@@ -1194,6 +1310,10 @@ def main() -> None:
         upper_quantile=args.upper_quantile,
         distance_penalty_weight=args.distance_penalty_weight,
         distance_neighbor_k=args.distance_neighbor_k,
+        yield_risk_penalty=args.yield_risk_penalty,
+        max_yield_improvement_pct=args.max_yield_improvement_pct,
+        max_profit_improvement_pct=args.max_profit_improvement_pct,
+        improvement_cap_penalty_weight=args.improvement_cap_penalty_weight,
         allow_unseen_irrigation_modes=args.allow_unseen_irrigation_modes,
     )
 
@@ -1212,6 +1332,10 @@ def main() -> None:
         upper_quantile=args.upper_quantile,
         distance_penalty_weight=args.distance_penalty_weight,
         distance_neighbor_k=args.distance_neighbor_k,
+        yield_risk_penalty=args.yield_risk_penalty,
+        max_yield_improvement_pct=args.max_yield_improvement_pct,
+        max_profit_improvement_pct=args.max_profit_improvement_pct,
+        improvement_cap_penalty_weight=args.improvement_cap_penalty_weight,
     )
 
     print(f"Resolved model: {resolved_model_path}")
