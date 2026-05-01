@@ -20,13 +20,14 @@ DEFAULT_FEATURES_PATH = DEFAULT_MODEL_ROOT / "used_features.csv"
 DEFAULT_EXPORT_DIR = PROJECT_ROOT / "outputs" / "management_yield_region_optimized"
 DEFAULT_COST_ESTIMATORS_CACHE_PATH = PROJECT_ROOT / "outputs" / "cost_profit_estimators_cache_ha.joblib"
 DEFAULT_COST_ESTIMATORS_MERGED_PATH = PROJECT_ROOT / "outputs" / "cost_profit_estimators_merged_ha.csv"
-DEFAULT_GRAIN_PRICE = 2.3
+DEFAULT_GRAIN_PRICE = 2.4
 DEFAULT_RANDOM_STATE = 42
-DEFAULT_MAXITER = 100
-DEFAULT_POPSIZE = 9
-DEFAULT_LOWER_QUANTILE = 0.1
-DEFAULT_UPPER_QUANTILE = 0.9
-DEFAULT_DISTANCE_PENALTY_WEIGHT = 3000
+DEFAULT_MAXITER = 120
+DEFAULT_POPSIZE = 12
+DEFAULT_LOWER_QUANTILE = 0.05
+DEFAULT_UPPER_QUANTILE = 0.95
+DEFAULT_DISTANCE_PENALTY_WEIGHT = 500
+DEFAULT_DISTANCE_NEIGHBOR_K = 5
 DECISION_VALUE_STEPS = {
     "Sow_DOY": 1.0,
     "Density": 500.0,
@@ -137,6 +138,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lower-quantile", type=float, default=DEFAULT_LOWER_QUANTILE)
     parser.add_argument("--upper-quantile", type=float, default=DEFAULT_UPPER_QUANTILE)
     parser.add_argument("--distance-penalty-weight", type=float, default=DEFAULT_DISTANCE_PENALTY_WEIGHT)
+    parser.add_argument("--distance-neighbor-k", type=int, default=DEFAULT_DISTANCE_NEIGHBOR_K)
     parser.add_argument("--allow-unseen-irrigation-modes", action="store_true")
     return parser.parse_args()
 
@@ -575,7 +577,11 @@ def nearest_management_distance(
     region_df: pd.DataFrame,
     irrigation_mode: str,
     direct_values: dict[str, float],
+    neighbor_k: int,
 ) -> float:
+    if neighbor_k <= 0:
+        raise ValueError("neighbor_k must be a positive integer.")
+
     columns = ["Sow_DOY", "Density", "Fer_N", "Fer_P", "Fer_K", "Pest_Cost"]
     if irrigation_mode != "NoIrrigation":
         columns.append("Irr_Elec")
@@ -599,7 +605,9 @@ def nearest_management_distance(
     scales = reference_matrix.std(axis=0, ddof=0)
     scales[~np.isfinite(scales) | (scales < 1e-9)] = 1.0
     distances = np.linalg.norm((reference_matrix - candidate_array) / scales, axis=1)
-    return float(np.min(distances))
+    neighbor_count = min(int(neighbor_k), len(distances))
+    nearest_distances = np.partition(distances, neighbor_count - 1)[:neighbor_count]
+    return float(np.mean(nearest_distances))
 
 
 def aggregate_yield(values: np.ndarray, aggregation: str) -> float:
@@ -622,6 +630,7 @@ def evaluate_region_management(
     grain_price: float,
     aggregation: str,
     distance_penalty_weight: float,
+    distance_neighbor_k: int,
 ) -> dict[str, float | int | str]:
     counts = infer_management_counts(
         irrigation_mode=str(irrigation_scenario["mode_key"]),
@@ -661,6 +670,7 @@ def evaluate_region_management(
         region_df=region_df,
         irrigation_mode=str(irrigation_scenario["mode_key"]),
         direct_values=direct_values,
+        neighbor_k=distance_neighbor_k,
     )
     objective_value = raw_objective - distance_penalty_weight * distance_penalty
 
@@ -754,6 +764,7 @@ def optimize_region(
     lower_quantile: float,
     upper_quantile: float,
     distance_penalty_weight: float,
+    distance_neighbor_k: int,
     allow_unseen_irrigation_modes: bool,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     region_code = region_df["Region"].iloc[0]
@@ -807,6 +818,7 @@ def optimize_region(
                 grain_price=grain_price,
                 aggregation=aggregation,
                 distance_penalty_weight=distance_penalty_weight,
+                distance_neighbor_k=distance_neighbor_k,
             )
             return -float(evaluation["objective_value"])
 
@@ -840,6 +852,7 @@ def optimize_region(
             grain_price=grain_price,
             aggregation=aggregation,
             distance_penalty_weight=distance_penalty_weight,
+            distance_neighbor_k=distance_neighbor_k,
         )
         best_evaluation.update(
             {
@@ -953,6 +966,7 @@ def build_region_results(
     lower_quantile: float,
     upper_quantile: float,
     distance_penalty_weight: float,
+    distance_neighbor_k: int,
     allow_unseen_irrigation_modes: bool,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     selected_region_frames: list[pd.DataFrame] = []
@@ -977,6 +991,7 @@ def build_region_results(
             lower_quantile=lower_quantile,
             upper_quantile=upper_quantile,
             distance_penalty_weight=distance_penalty_weight,
+            distance_neighbor_k=distance_neighbor_k,
             allow_unseen_irrigation_modes=allow_unseen_irrigation_modes,
         )
         selected_region_frames.append(selected_rows_df)
@@ -1033,6 +1048,7 @@ def export_run_metadata(
     lower_quantile: float,
     upper_quantile: float,
     distance_penalty_weight: float,
+    distance_neighbor_k: int,
 ) -> None:
     metadata_df = pd.DataFrame(
         [
@@ -1045,6 +1061,7 @@ def export_run_metadata(
                 "lower_quantile": lower_quantile,
                 "upper_quantile": upper_quantile,
                 "distance_penalty_weight": distance_penalty_weight,
+                "distance_neighbor_k": distance_neighbor_k,
             }
         ]
     )
@@ -1137,6 +1154,8 @@ def main() -> None:
 
     if not 0.0 <= args.lower_quantile < args.upper_quantile <= 1.0:
         raise ValueError("Quantile bounds must satisfy 0 <= lower < upper <= 1.")
+    if args.distance_neighbor_k <= 0:
+        raise ValueError("distance_neighbor_k must be a positive integer.")
 
     model_df, cost_df, model, features, resolved_model_path = load_inputs(
         model_data_path=args.model_data_path,
@@ -1174,6 +1193,7 @@ def main() -> None:
         lower_quantile=args.lower_quantile,
         upper_quantile=args.upper_quantile,
         distance_penalty_weight=args.distance_penalty_weight,
+        distance_neighbor_k=args.distance_neighbor_k,
         allow_unseen_irrigation_modes=args.allow_unseen_irrigation_modes,
     )
 
@@ -1191,6 +1211,7 @@ def main() -> None:
         lower_quantile=args.lower_quantile,
         upper_quantile=args.upper_quantile,
         distance_penalty_weight=args.distance_penalty_weight,
+        distance_neighbor_k=args.distance_neighbor_k,
     )
 
     print(f"Resolved model: {resolved_model_path}")
