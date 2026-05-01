@@ -1,2 +1,2 @@
 ﻿resolved_model_path,aggregation,random_state,maxiter,popsize,lower_quantile,upper_quantile,distance_penalty_weight
-D:\Workspace\Papers\maize_paper\outputs\model_outputs_fixed\xgboost\model.pkl,median,42,120,12,0.05,0.95,800
+D:\workspace\papers\maize_paper\outputs\model_outputs_fixed\xgboost\model.pkl,median,42,100,9,0.1,0.9,3000
