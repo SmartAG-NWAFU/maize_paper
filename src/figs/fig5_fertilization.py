@@ -33,25 +33,25 @@ PANEL_FONT_SIZE = 22
 VARIABLE_SPECS = [
     {
         "column": "Fer_Count",
-        "label": "Fertilization frequency",
+        "label": "Fertilization events (count)",
         "summary_prefix": "fert_count",
         "tag": "(a)",
     },
     {
         "column": "Fer_N",
-        "label": "N amount (kg ha$^{-1}$)",
+        "label": "N application rate (kg ha$^{-1}$)",
         "summary_prefix": "n",
         "tag": "(b)",
     },
     {
         "column": "Fer_P",
-        "label": "P amount (kg ha$^{-1}$)",
+        "label": "P application rate (kg ha$^{-1}$)",
         "summary_prefix": "p",
         "tag": "(c)",
     },
     {
         "column": "Fer_K",
-        "label": "K amount (kg ha$^{-1}$)",
+        "label": "K application rate (kg ha$^{-1}$)",
         "summary_prefix": "k",
         "tag": "(d)",
     },
@@ -195,7 +195,7 @@ def plot_boxplot(ax: plt.Axes, df: pd.DataFrame, column: str, y_label: str, tag:
         ax.text(
             0.02,
             0.84 - pos * 0.07,
-            f"{region}: {display_value}",
+            f"{region} mean: {display_value}",
             fontsize=ANNOTATION_FONT_SIZE,
             color="#1f1f1f",
             bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.75, "pad": 1.2},

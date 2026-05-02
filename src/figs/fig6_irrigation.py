@@ -35,13 +35,13 @@ LEGEND_FONT_SIZE = 19
 VARIABLE_SPECS = [
     {
         "column": "Irr_Count",
-        "label": "Irrigation frequency",
+        "label": "Irrigation events (count)",
         "summary_prefix": "irr_count",
         "tag": "(a)",
     },
     {
         "column": "Irr_Elec",
-        "label": "Irrigation electricity usage (kWh ha$^{-1}$)",
+        "label": "Irrigation electricity use (kWh ha$^{-1}$)",
         "summary_prefix": "irr_elec",
         "tag": "(b)",
     },
@@ -208,7 +208,7 @@ def plot_boxplot(ax: plt.Axes, df: pd.DataFrame, column: str, y_label: str, tag:
         ax.text(
             0.02,
             0.84 - pos * 0.07,
-            f"{region}: {display_value}",
+            f"{region} mean: {display_value}",
             fontsize=ANNOTATION_FONT_SIZE,
             color="#1f1f1f",
             bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.75, "pad": 1.2},
@@ -246,7 +246,7 @@ def plot_facility_bar(ax: plt.Axes, facility_summary: pd.DataFrame, tag: str) ->
 
     ax.set_xticks(x)
     ax.set_xticklabels(facility_labels, fontsize=TICK_FONT_SIZE+6)
-    ax.set_ylabel("Count")
+    ax.set_ylabel("Number of fields")
     ax.set_ylim(0, max_value * 1.28 if max_value > 0 else 1.0)
     style_axis(ax)
     ax.legend(frameon=False, loc=(0.01, 0.68),fontsize=22)

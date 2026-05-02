@@ -1,3 +1,4 @@
-﻿region,pest_count_count,pest_count_mean,pest_count_median,pest_count_min,pest_count_max,pest_cost_count,pest_cost_mean,pest_cost_median,pest_cost_min,pest_cost_max
-Hebei,26,1.77,2.0,1,2,26,545.65,530.92,269.25,812.85
-Shandong,55,1.65,2.0,0,4,55,278.95,255.0,0.0,750.0
+﻿,region,pest_count,pest_count,pest_count,pest_count,pest_count,pest_cost,pest_cost,pest_cost,pest_cost,pest_cost
+,,count,mean,median,min,max,count,mean,median,min,max
+0,Hebei,26,1.77,2.0,1,2,26,545.65,530.92,269.25,812.85
+1,Shandong,55,1.65,2.0,0,4,55,278.95,255.0,0.0,750.0

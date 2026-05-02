@@ -25,13 +25,13 @@ SCENARIO_COLORS = {
 
 REGION_ORDER = ["Hebei", "Shandong"]
 
-BASE_FONT_SIZE = 19
-LABEL_FONT_SIZE = 22
-TICK_FONT_SIZE = 19
-X_TICK_FONT_SIZE = 25
-LEGEND_FONT_SIZE = 18
-ANNOTATION_FONT_SIZE = 16
-PANEL_FONT_SIZE = 22
+BASE_FONT_SIZE = 17
+LABEL_FONT_SIZE = 18
+TICK_FONT_SIZE = 16
+X_TICK_FONT_SIZE = 18
+LEGEND_FONT_SIZE = 16
+ANNOTATION_FONT_SIZE = 13
+PANEL_FONT_SIZE = 19
 
 BAR_SPECS = [
     {
@@ -212,10 +212,9 @@ def plot_grouped_bars(ax: plt.Axes, df: pd.DataFrame, column: str, y_label: str,
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=X_TICK_FONT_SIZE)
-    ax.set_ylabel(y_label)
-    ax.set_ylim(0, y_max * 1.26 if y_max > 0 else 1.0)
+    ax.set_ylabel(y_label, labelpad=8)
+    ax.set_ylim(0, y_max * 1.32 if y_max > 0 else 1.0)
     style_axis(ax)
-    ax.legend(frameon=False, loc=(0.47, 0.86))
     add_panel_tag(ax, tag)
 
 
@@ -230,10 +229,22 @@ def main() -> None:
     summary = build_summary_table(baseline_df)
     summary.to_csv(args.summary_output, index=False, encoding="utf-8-sig")
 
-    fig, axes = plt.subplots(1, 2, figsize=(13.8, 6.2), constrained_layout=True)
-    for ax, spec in zip(np.atleast_1d(axes), BAR_SPECS[:2]):
+    fig, axes = plt.subplots(1, 3, figsize=(16.2, 5.8), constrained_layout=False)
+    for ax, spec in zip(np.atleast_1d(axes), BAR_SPECS):
         plot_grouped_bars(ax, baseline_df, spec["column"], spec["label"], spec["tag"])
 
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        frameon=False,
+        loc="upper center",
+        ncol=2,
+        bbox_to_anchor=(0.5, 0.99),
+        columnspacing=1.8,
+        handlelength=1.5,
+    )
+    fig.subplots_adjust(left=0.075, right=0.99, bottom=0.18, top=0.80, wspace=0.48)
     fig.savefig(args.output)
     plt.close(fig)
 

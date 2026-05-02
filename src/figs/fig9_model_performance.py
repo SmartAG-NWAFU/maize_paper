@@ -98,7 +98,7 @@ def plot_model_comparison(summary_df: pd.DataFrame, output_path: Path) -> None:
 
     for ax, train_col, valid_col, y_label, tag in [
         (axes[0], "train_r2", "valid_r2", r"R²", "(a)"),
-        (axes[1], "train_rmse", "valid_rmse", "RMSE", "(b)"),
+        (axes[1], "train_rmse", "valid_rmse", "RMSE (kg ha$^{-1}$)", "(b)"),
     ]:
         ax.bar(
             x - width / 2,

@@ -210,25 +210,31 @@ def plot_yield_profit_scatter(ax: plt.Axes, df: pd.DataFrame) -> None:
         x_val = row[x_col]
         y_val = row[y_col]
         if x_low <= x_val <= x_up and y_low <= y_val <= y_up:
-            return "M"
+            return "Medium cost-medium yield"
         if x_val >= x_med and y_val >= y_med:
-            return "H-H"
+            return "High cost-high yield"
         if x_val < x_med and y_val >= y_med:
-            return "L-H"
+            return "Low cost-high yield"
         if x_val < x_med and y_val < y_med:
-            return "L-L"
-        return "H-L"
+            return "Low cost-low yield"
+        return "High cost-low yield"
 
     scatter_df["zone"] = scatter_df.apply(assign_zone, axis=1)
 
     zone_markers = {
-        "H-H": "^",
-        "L-H": "o",
-        "M": "s",
-        "L-L": "v",
-        "H-L": "X",
+        "High cost-high yield": "^",
+        "Low cost-high yield": "o",
+        "Medium cost-medium yield": "s",
+        "Low cost-low yield": "v",
+        "High cost-low yield": "X",
     }
-    zone_order = ["H-H", "L-H", "M", "L-L", "H-L"]
+    zone_order = [
+        "High cost-high yield",
+        "Low cost-high yield",
+        "Medium cost-medium yield",
+        "Low cost-low yield",
+        "High cost-low yield",
+    ]
 
     for zone in zone_order:
         zone_df = scatter_df[scatter_df["zone"] == zone]
@@ -273,8 +279,8 @@ def plot_yield_profit_scatter(ax: plt.Axes, df: pd.DataFrame) -> None:
 
     style_axis(ax)
     add_panel_tag(ax, "(d)")
-    ax.set_xlabel("Cost (CNY ha$^{-1}$)")
-    ax.set_ylabel("Yield (kg ha$^{-1}$)")
+    ax.set_xlabel("Production input cost (CNY ha$^{-1}$)")
+    ax.set_ylabel("Grain yield (kg ha$^{-1}$)")
 
     region_handles = [
         Line2D(
@@ -318,9 +324,10 @@ def plot_yield_profit_scatter(ax: plt.Axes, df: pd.DataFrame) -> None:
     ax.add_artist(first_legend)
     ax.legend(
         handles=zone_handles,
-        loc=(-0.02, 0.52),
+        loc="upper left",
+        bbox_to_anchor=(1.02, 0.72),
         frameon=False,
-        fontsize=SCATTER_LEGEND_FONT_SIZE + 7,
+        fontsize=SCATTER_LEGEND_FONT_SIZE,
         handletextpad=0.2,
         labelspacing=0.2,
     )

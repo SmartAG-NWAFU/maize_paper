@@ -23,8 +23,6 @@ REGION_COLORS = {
     "Shandong": "#58A5CF",
 }
 
-MU_TO_HA = 15.0
-
 BASE_FONT_SIZE = 19
 LABEL_FONT_SIZE = 22
 TICK_FONT_SIZE = 19
@@ -93,7 +91,7 @@ def load_data(input_path: Path) -> pd.DataFrame:
     )
     df["region"] = df["region_code"].map(REGION_LABELS)
     df["sowing_day_of_year"] = pd.to_numeric(df["sowing_day_of_year"], errors="coerce")
-    df["measured_density"] = pd.to_numeric(df["measured_density"], errors="coerce") * MU_TO_HA
+    df["measured_density"] = pd.to_numeric(df["measured_density"], errors="coerce")
     return df.dropna(subset=["region", "sowing_day_of_year", "measured_density"]).copy()
 
 
@@ -178,7 +176,7 @@ def plot_boxplot(ax: plt.Axes, df: pd.DataFrame, column: str, y_label: str, tag:
         ax.text(
             0.02,
             0.84 - pos * 0.07,
-            f"{region}: {mean_value:.0f}",
+            f"{region} mean: {mean_value:.0f}",
             fontsize=ANNOTATION_FONT_SIZE,
             color="#1f1f1f",
             bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.75, "pad": 1.2},
@@ -204,7 +202,7 @@ def main() -> None:
     summary.to_csv(args.summary_output, index=False, encoding="utf-8-sig")
 
     fig, axes = plt.subplots(1, 2, figsize=(13.3, 5.8), constrained_layout=True)
-    plot_boxplot(axes[0], df, "sowing_day_of_year", "Sowing date (DOY)", "(a)")
+    plot_boxplot(axes[0], df, "sowing_day_of_year", "Sowing date (day of year)", "(a)")
     plot_boxplot(axes[1], df, "measured_density", "Plant density (plants ha$^{-1}$)", "(b)")
     fig.savefig(args.output)
     plt.close(fig)
