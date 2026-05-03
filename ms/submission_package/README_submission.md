@@ -1,22 +1,16 @@
 # Precision Agriculture Submission Package
 
-Manuscript title: Quantifying Yield and Profit Improvement Potential of Maize through Management Optimization under Current Farming Conditions in the North China Plain of China
+Prepared for submission to *Precision Agriculture*.
 
-Journal: Precision Agriculture
+## Files
 
-## Upload Files
+- `manuscript_PA_submission_ready.docx`: main manuscript for submission.
+- `figures/Fig1.png` to `figures/Fig11.png`: figure files matching the manuscript captions.
+- `cover_letter/cover_letter_precision_agriculture.docx`: cover letter.
+- `submission_interface_text.md`: text prepared for the journal submission interface.
 
-- `manuscript.docx` - main manuscript with title page, structured abstract, embedded figures, tables, captions, statements and declarations, and references.
-- `cover_letter/cover_letter_precision_agriculture.docx` - cover letter.
-- `figures/Fig1.png` through `figures/Fig11.png` - separate electronic figure files, named according to Springer guidance.
+## Notes
 
-## Submission Interface Text
-
-Some Springer fields must be entered manually in the submission interface even when they are also present in the manuscript. Use `submission_interface_text.md` for paste-ready text.
-
-## Final Checks Before Upload
-
-- Confirm author order and affiliations in the submission system match the manuscript.
-- Confirm ORCID iDs, if available.
-- Confirm the funding statement and whether a grant number exists.
-- Confirm all figure files render correctly in the submission preview.
+- No supplementary material is included. The methods information has been integrated into the manuscript, and the manuscript contains no citations to supplementary material or Online Resource files.
+- The manuscript title page includes the full author list, affiliations, and corresponding-author information.
+- The manuscript text is formatted in Times New Roman with black text, continuous line numbering, and double line spacing.

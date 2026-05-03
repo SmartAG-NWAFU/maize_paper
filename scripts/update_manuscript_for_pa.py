@@ -571,8 +571,7 @@ DECLARATIONS = [
         [
             (
                 "This work was funded by Longping Kaihong Agricultural Technology "
-                "(Beijing) Co., Ltd. (\u9686\u5e73\u5f00\u9e3f(\u5317\u4eac)"
-                "\u519c\u4e1a\u79d1\u6280\u6709\u9650\u516c\u53f8). The authors "
+                "(Beijing) Co., Ltd. The authors "
                 "gratefully acknowledge financial support from the Key Research "
                 "and Development Program of Shaanxi (Grant No. 2023-ZDLNY-64).",
                 False,
@@ -623,8 +622,8 @@ DECLARATIONS = [
                 "Ming Tian, Dengke Cao, and Yan Zhao contributed to field "
                 "investigation, data collection, data curation, and resources. "
                 "Zhiming Xia wrote the first draft of the manuscript. Bin Chen, "
-                "Qi Shen, Zeyun Liang, Ming Tian, Dengke Cao, Yan Zhao, Haijing "
-                "Shi, Qiang Yu, and Gang Zhao reviewed and edited the manuscript. "
+                "Qi Shen, Zeyun Liang, Ming Tian, Dengke Cao, Yan Zhao, Changqing "
+                "Yan, Haijing Shi, Qiang Yu, and Gang Zhao reviewed and edited the manuscript. "
                 "Qiang Yu and Gang Zhao supervised the work and contributed to funding "
                 "acquisition. All authors read and approved the final manuscript.",
                 False,
@@ -905,7 +904,7 @@ FIELD_MEASUREMENT_BLOCK = [
         "At maize maturity, grain yield was estimated from field sampling. Grain "
         "yield (Y, kg ha\u207b\u00b9) was calculated as:"
     ),
-    ("Y = HEN \u00d7 KNE \u00d7 TKW / 1,000,000"),
+    ("Y = (HEN \u00d7 KNE \u00d7 TKW) / 1,000,000     (1)"),
     (
         "where HEN is harvested ear number per hectare, KNE is average kernel "
         "number per ear, and TKW is 1000-kernel weight (g). The number of "
@@ -920,7 +919,7 @@ FIELD_MEASUREMENT_BLOCK = [
         "At each sampling point, harvested ear number per hectare was calculated "
         "as:"
     ),
-    ("HEN = 10,000 / (PS \u00d7 RS)"),
+    ("HEN = 10,000 / (PS \u00d7 RS)     (2)"),
     (
         "where PS and RS are plant spacing and row spacing (m), respectively. "
         "Average kernel number per ear was estimated from 20 consecutive ears, "
@@ -935,7 +934,7 @@ FIELD_MEASUREMENT_BLOCK = [
         "calculated after yield prediction rather than being used as a model "
         "input:"
     ),
-    ("Profit = p \u00d7 Y - C"),
+    ("Profit = p \u00d7 Y \u2212 C     (3)"),
     (
         "where Profit is net return (CNY ha\u207b\u00b9), p is maize grain price "
         "(CNY kg\u207b\u00b9), Y is grain yield (kg ha\u207b\u00b9), and C is total input "
@@ -958,11 +957,11 @@ MODEL_EVALUATION_BLOCK = [
         "and validation sets using the coefficient of determination (R\u00b2) and "
         "root mean square error (RMSE):"
     ),
-    ("R\u00b2 = 1 - sum((y_i - yhat_i)^2) / sum((y_i - ybar)^2)"),
-    ("RMSE = sqrt(sum((y_i - yhat_i)^2) / n)"),
+    ("R\u00b2 = 1 \u2212 \u03a3(y\u1d62 \u2212 \u0177\u1d62)\u00b2 / \u03a3(y\u1d62 \u2212 \u0233)\u00b2     (4)"),
+    ("RMSE = \u221a[\u03a3(y\u1d62 \u2212 \u0177\u1d62)\u00b2 / n]     (5)"),
     (
-        "where y_i and yhat_i are the observed and predicted yields for "
-        "observation i, respectively, ybar is the mean observed yield, and n is "
+        "where y\u1d62 and \u0177\u1d62 are the observed and predicted yields for "
+        "observation i, respectively, \u0233 is the mean observed yield, and n is "
         "the number of observations in the evaluated split. The final model for "
         "scenario analysis was selected primarily according to validation "
         "performance, while also considering the gap between training and "
@@ -1032,6 +1031,7 @@ def set_author_line(p):
         ("Ming Tian", "2", ", "),
         ("Dengke Cao", "3", ", "),
         ("Yan Zhao", "4", ", "),
+        ("Changqing Yan", "5", ", "),
         ("Haijing Shi", "1", ", "),
         ("Qiang Yu", "1", ", "),
         ("Gang Zhao", "1,*", ""),
@@ -1478,14 +1478,7 @@ def main():
         set_title_text(title_p)
 
         author_p = next(p for p in children if p.tag == W + "p" and paragraph_text(p).startswith("Zhiming Xia"))
-        set_paragraph_text(
-            author_p,
-            [(
-                "Zhiming Xia1, Bin Chen1, Qi Shen2, Zeyun Liang2, Ming Tian2, "
-                "Dengke Cao3, Yan Zhao4, Haijing Shi1, Qiang Yu1, Gang Zhao1,*",
-                False,
-            )],
-        )
+        set_author_line(author_p)
 
         for p in children:
             if p.tag != W + "p":
