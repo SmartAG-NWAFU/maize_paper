@@ -1,5 +1,6 @@
 from copy import deepcopy
 from pathlib import Path
+import re
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from lxml import etree
@@ -13,12 +14,70 @@ W = f"{{{W_NS}}}"
 INPUT = Path("ms/manuscript.docx")
 OUTPUT = Path("ms/manuscript_PA_submission_ready.docx")
 
+MEDIA_REPLACEMENTS = {
+    "word/media/image3.png": Path("fig/fig3_region_management_timeline.png"),
+    "word/media/image4.png": Path("fig/fig4_region_sowing_density_boxplots.png"),
+    "word/media/image5.png": Path("fig/fig5_region_fertilization_boxplots.png"),
+    "word/media/image6.png": Path("fig/fig6_region_irrigation_boxplots.png"),
+    "word/media/image7.png": Path("fig/fig7_region_pesticide_boxplots.png"),
+    "word/media/image8.png": Path("fig/fig8_region_yield_cost_profit_boxplots.png"),
+    "word/media/image9.png": Path("fig/fig9_model_performance_comparison.png"),
+    "word/media/image10.png": Path("fig/fig10_xgboost_feature_importance.png"),
+}
+
+FIGURE_TABLE_ANCHORS = {
+    **{f"Figure {idx}": f"bm_fig_{idx}" for idx in range(1, 12)},
+    "Table 1": "bm_table_1",
+    "Table 2": "bm_table_2",
+}
+
+CITATION_TARGETS = [
+    ("Adhikari et al. 2023", "Adhikari, K.", "bm_ref_adhikari_2023"),
+    ("Baio et al. 2023", "Baio, F.", "bm_ref_baio_2023"),
+    ("Breiman 2001", "Breiman,", "bm_ref_breiman_2001"),
+    ("Chen and Guestrin 2016", "Chen, T.", "bm_ref_chen_guestrin_2016"),
+    ("Chen et al. 2011", "Chen, X.-P.", "bm_ref_chen_2011"),
+    ("Chen et al. 2014", "Chen, X.,", "bm_ref_chen_2014"),
+    ("Chen et al. 2019", "Chen, G.", "bm_ref_chen_2019"),
+    ("Fang et al. 2010", "Fang, Q.", "bm_ref_fang_2010"),
+    ("Gerber et al. 2024", "Gerber, J.", "bm_ref_gerber_2024"),
+    ("Holzworth et al. 2014", "Holzworth, D.", "bm_ref_holzworth_2014"),
+    ("Hu et al. 2023", "Hu, T.", "bm_ref_hu_2023"),
+    ("Jeong et al. 2016", "Jeong, J.", "bm_ref_jeong_2016"),
+    ("Jones et al. 2003", "Jones, J.", "bm_ref_jones_2003"),
+    ("Keating et al. 2003", "Keating, B.", "bm_ref_keating_2003"),
+    ("Khaki and Wang 2019", "Khaki, S.", "bm_ref_khaki_wang_2019"),
+    ("Liang et al. 2011", "Liang, W.", "bm_ref_liang_2011"),
+    ("B.-Y. Liu et al. 2021", "Liu, B.-Y.", "bm_ref_liu_by_2021"),
+    ("W. Liu et al. 2021", "Liu, W.", "bm_ref_liu_w_2021"),
+    ("Liu et al. 2026", "Liu, D.", "bm_ref_liu_2026"),
+    ("Luo et al. 2023", "Luo, N.", "bm_ref_luo_2023"),
+    ("Maseko et al. 2024", "Maseko, S.", "bm_ref_maseko_2024"),
+    ("Meng et al. 2013", "Meng, Q.", "bm_ref_meng_2013"),
+    ("Mo et al. 2017", "Mo, X.-G.", "bm_ref_mo_2017"),
+    ("Nyéki et al. 2021", "Nyéki, A.", "bm_ref_nyeki_2021"),
+    ("Paudel et al. 2021", "Paudel, D.", "bm_ref_paudel_2021"),
+    ("Shahhosseini et al. 2019", "Shahhosseini, M., Martinez", "bm_ref_shahhosseini_2019"),
+    ("Shahhosseini et al. 2021", "Shahhosseini, M., Hu", "bm_ref_shahhosseini_2021"),
+    ("Smith et al. 2026", "Smith, H.", "bm_ref_smith_2026"),
+    ("Storn and Price 1997", "Storn, R.", "bm_ref_storn_price_1997"),
+    ("Tanaka et al. 2024", "Tanaka, T.", "bm_ref_tanaka_2024"),
+    ("van Ittersum et al. 2013", "van Ittersum, M.", "bm_ref_van_ittersum_2013"),
+    ("Van Klompenburg et al. 2020", "Van Klompenburg, T.", "bm_ref_van_klompenburg_2020"),
+    ("Wang et al. 2023", "Wang, H.", "bm_ref_wang_2023"),
+    ("Xiao et al. 2024", "Xiao, L.", "bm_ref_xiao_2024"),
+    ("Yang et al. 2015", "Yang, X.", "bm_ref_yang_2015"),
+    ("Zhang et al. 2022", "Zhang, HaiYan", "bm_ref_zhang_2022"),
+    ("Zhang et al. 2026", "Zhang, Honghang", "bm_ref_zhang_2026"),
+    ("Zou and Hastie 2005", "Zou, H.", "bm_ref_zou_hastie_2005"),
+]
+
 
 STRUCTURED_ABSTRACT = [
     [
         ("Purpose: ", True),
         (
-            "This study quantified how much maize yield and profit could improve "
+            "We quantified how much maize yield and profit could improve "
             "through region-specific management optimization relative to current "
             "farmer management in the North China Plain of China.",
             False,
@@ -29,9 +88,10 @@ STRUCTURED_ABSTRACT = [
         (
             "Field observations from 81 summer maize fields in Hebei and Shandong "
             "Provinces were used to build leakage-controlled yield prediction "
-            "models from management, field-status, weather, yield, and input-cost "
-            "variables. Ordinary least squares, Elastic Net, random forest, and "
-            "XGBoost models were compared. The selected model was then used as a "
+            "models from management, field-status, and weather variables, with "
+            "yield used only as the response variable. Ordinary least squares, "
+            "Elastic Net, random forest, and XGBoost models were compared. The "
+            "selected model was then used as a "
             "regional response function for constrained maximum-yield scenario "
             "optimization, with controllable management variables restricted to "
             "empirically supported ranges. Profit was evaluated after yield "
@@ -56,9 +116,9 @@ STRUCTURED_ABSTRACT = [
     [
         ("Conclusion: ", True),
         (
-            "Constrained machine-learning scenario analysis can translate field "
-            "observations into region-specific estimates of agronomic and economic "
-            "improvement potential for precision maize management.",
+            "A constrained baseline-to-optimization framework can translate "
+            "field observations into region-specific estimates of agronomic and "
+            "economic improvement potential for precision maize management.",
             False,
         ),
     ],
@@ -76,13 +136,13 @@ INTRODUCTION = [
         "and large differences in yield and profit among farms. Previous studies "
         "have shown that maize yield gaps in China and the North China Plain are "
         "closely related to crop establishment, nutrient input, irrigation, and "
-        "farmer-to-farmer management differences (G. Chen et al. 2019; X. Chen "
-        "et al. 2014; X.-P. Chen et al. 2011; Liang et al. 2011; Meng et al. "
-        "2013; H. Wang et al. 2023). At the same time, inefficient nitrogen and "
+        "farmer-to-farmer management differences (Chen et al. 2019; Chen et "
+        "al. 2014; Chen et al. 2011; Liang et al. 2011; Meng et al. 2013; "
+        "Wang et al. 2023). At the same time, inefficient nitrogen and "
         "water management can reduce resource-use efficiency, increase "
         "environmental pressure, and weaken farm profitability (B.-Y. Liu et al. "
-        "2021; W. Liu et al. 2021; Mo et al. 2017; Yang et al. 2015). Therefore, "
-        "the practical question for precision maize management is not only which "
+        "2021; W. Liu et al. 2021; Mo et al. 2017; Yang et al. 2015). The "
+        "practical question for precision maize management is not only which "
         "factors are associated with yield variation, but how much yield and "
         "profit improvement potential remains relative to current management "
         "baselines."
@@ -104,8 +164,8 @@ INTRODUCTION = [
         "et al. 2024; Paudel et al. 2021). However, prediction accuracy and "
         "variable importance alone do not establish causal effects, and model "
         "extrapolation outside the support of observed data can be unreliable. "
-        "Scenario analysis based on machine learning therefore needs explicit "
-        "constraints and cautious interpretation."
+        "Scenario analysis based on machine learning needs explicit constraints "
+        "and cautious interpretation."
     ),
     (
         "Despite these advances, many yield-modelling studies still stop at "
@@ -113,14 +173,14 @@ INTRODUCTION = [
         "which factors are associated with yield variation, but they do not "
         "directly quantify how controllable management variables should be "
         "combined under realistic constraints or how much improvement is "
-        "possible relative to the current management baseline. This distinction "
+        "possible relative to the current management baseline. The distinction "
         "is important for farmers and regional decision makers, because maize "
         "management is a season-long system involving sowing date, plant "
         "density, nutrient supply, irrigation, crop protection, harvesting, and "
         "cost structure. Yield improvement also needs economic evaluation: a "
         "high-yield scenario is not practically useful if the additional input "
-        "cost offsets the yield benefit (Adhikari et al. 2023; HaiYan Zhang et "
-        "al. 2022; Honghang Zhang et al. 2026). A transparent approach is to "
+        "cost offsets the yield benefit (Adhikari et al. 2023; Zhang et al. "
+        "2022; Zhang et al. 2026). A transparent approach is to "
         "estimate agronomic improvement potential under a constrained "
         "maximum-yield strategy first and then evaluate whether the "
         "yield-oriented scenario also improves profit."
@@ -139,12 +199,12 @@ INTRODUCTION = [
         "management variables were changed and candidate solutions were kept "
         "within empirically supported regional ranges. Profit was evaluated "
         "after yield optimization using scenario-specific input-cost changes. "
-        "The optimized scenarios should therefore be interpreted as "
-        "model-estimated regional decision-support configurations, not as "
+        "The optimized scenarios are best interpreted as model-estimated "
+        "regional decision-support configurations, not as "
         "field-validated causal prescriptions for individual farms."
     ),
     (
-        "This study aimed to develop a leakage-controlled and interpretable "
+        "The objectives were to develop a leakage-controlled and interpretable "
         "machine-learning model for maize yield prediction, identify the key "
         "management and environmental predictors associated with yield variation, "
         "quantify model-estimated yield improvement potential under constrained "
@@ -158,7 +218,7 @@ INTRODUCTION = [
         "current management baselines would show greater relative optimization "
         "potential. By linking current management baselines with constrained "
         "maximum-yield scenario optimization and post-optimization profit "
-        "assessment, this study provides a practical framework for quantifying "
+        "assessment, the study provides a practical framework for quantifying "
         "model-estimated management improvement potential in maize production in "
         "the North China Plain."
     ),
@@ -171,8 +231,8 @@ RESULT_REPLACEMENTS = {
         "and these regional contrasts provided the empirical basis for "
         "understanding subsequent optimization potential. Sowing date was broadly "
         "comparable between the two regions, with median sowing dates of day "
-        "167.5 in Hebei and day 169.0 in Shandong (Figure 4). This indicates "
-        "that large interregional differences in current production performance "
+        "167.5 in Hebei and day 169.0 in Shandong (Figure 4). Large "
+        "interregional differences in current production performance "
         "were unlikely to be explained by planting time alone. By contrast, "
         "plant density differed more clearly between regions. Based on the "
         "source dataset, Shandong had a substantially higher median density than "
@@ -187,7 +247,7 @@ RESULT_REPLACEMENTS = {
         "fertilization operations. However, nutrient application intensity was "
         "consistently higher in Shandong. Median N, P, and K application rates "
         "were 217.5, 75.0, and 85.93 kg ha\u207b\u00b9 in Shandong, compared with "
-        "189.0, 40.5, and 55.88 kg ha\u207b\u00b9 in Hebei. Therefore, the main "
+        "189.0, 40.5, and 55.88 kg ha\u207b\u00b9 in Hebei. The main "
         "regional difference in fertilization was not the frequency of "
         "application, but the amount of nutrient supplied per unit area. "
         "Together with the density pattern shown in Figure 4, these results "
@@ -204,8 +264,8 @@ RESULT_REPLACEMENTS = {
         "importantly, irrigation mode distribution differed substantially. Drip "
         "irrigation dominated in Shandong, accounting for 32 of the 55 sampled "
         "fields, whereas Hebei showed a more even distribution among flood "
-        "irrigation, sprinkler irrigation, and drip irrigation. This suggests "
-        "that Shandong already relied more strongly on drip-based systems, "
+        "irrigation, sprinkler irrigation, and drip irrigation. Compared with "
+        "Hebei, Shandong already relied more strongly on drip-based systems, "
         "whereas Hebei retained greater heterogeneity in water management. The "
         "irrigation contrast directly links current management differences to "
         "the yield-driving factors examined later in the modelling analysis."
@@ -217,15 +277,15 @@ RESULT_REPLACEMENTS = {
         "pesticide applications was 2 in both Hebei and Shandong, indicating "
         "similar field operation frequency. However, median pesticide cost in "
         "Hebei was markedly higher than in Shandong (530.92 vs. 255.00 CNY "
-        "ha\u207b\u00b9). This pattern suggests that regional differences in plant "
-        "protection were expressed more through cost structure than through the "
+        "ha\u207b\u00b9). Regional differences in plant protection were expressed more "
+        "through cost structure than through the "
         "number of spray events. Together, the evidence indicates that current "
         "management differences between the two regions were multidimensional, "
         "involving crop establishment, nutrient supply, irrigation strategy, and "
         "input expenditure."
     ),
     "The management baseline was reflected in production performance": (
-        "These management contrasts were reflected in baseline production "
+        "The management contrasts were reflected in baseline production "
         "performance (Figure 8). Shandong had a higher median yield than Hebei "
         "under current management (10,721.85 vs. 9,585.00 kg ha\u207b\u00b9), while "
         "median production cost was similar between regions (12,150.00 vs. "
@@ -237,8 +297,8 @@ RESULT_REPLACEMENTS = {
         "current conditions. Taken together, the baseline results show a "
         "consistent pattern: compared with Hebei, Shandong had a higher baseline "
         "management intensity and already achieved higher yield and profit, "
-        "whereas Hebei maintained a lower baseline and therefore potentially "
-        "larger room for improvement."
+        "whereas Hebei maintained a lower baseline with potentially larger room "
+        "for improvement."
     ),
     "The four candidate algorithms differed clearly in predictive performance": (
         "Because the scenario analysis depends on the credibility of the yield "
@@ -253,7 +313,7 @@ RESULT_REPLACEMENTS = {
         "final model. The difference between training and validation R\u00b2 was "
         "0.077 for XGBoost, smaller than the corresponding gap for random forest "
         "(0.135), suggesting a more favorable balance between fitting ability "
-        "and generalization. Therefore, XGBoost was used as the core model for "
+        "and generalization. XGBoost was used as the core model for "
         "the subsequent explainability analysis and scenario optimization."
     ),
     "The selected XGBoost model showed that yield variation was jointly associated": (
@@ -267,8 +327,8 @@ RESULT_REPLACEMENTS = {
         "ranked among the top predictors, indicating that environmental "
         "background still shaped yield responses even when management "
         "information was explicitly included in the model. The feature ranking "
-        "provides an important bridge between the baseline comparisons and the "
-        "optimization results. Specifically, the prominence of "
+        "connects the baseline comparisons with the optimization results: the "
+        "prominence of "
         "irrigation-related variables, plant density, and sowing date suggests "
         "that regional differences in water management and crop establishment "
         "were not merely descriptive contrasts, but were also closely associated "
@@ -294,7 +354,7 @@ RESULT_REPLACEMENTS = {
     "The scenario analysis showed that both regions retained substantial": (
         "Guided by the predictive model and the ranking of key management "
         "drivers, the scenario analysis quantified how much yield and profit "
-        "could be improved relative to the current regional baseline (Figure "
+        "could improve relative to the current regional baseline (Figure "
         "11). In Hebei, the optimized scenario increased median yield from "
         "9,585.00 to 12,209.45 kg ha\u207b\u00b9, corresponding to a gain of 2,624.45 "
         "kg ha\u207b\u00b9 or 27.38%. Over the same comparison, median profit increased "
@@ -308,7 +368,7 @@ RESULT_REPLACEMENTS = {
         "ha\u207b\u00b9 or 17.55%. Median profit increased from 12,031.56 to 17,615.88 "
         "CNY ha\u207b\u00b9, corresponding to a gain of 5,584.32 CNY ha\u207b\u00b9 or 46.41%. "
         "Median input cost increased from 12,150.00 to 13,047.58 CNY ha\u207b\u00b9, "
-        "representing a 7.39% increase. Thus, the optimization framework "
+        "representing a 7.39% increase. The optimization framework "
         "improved both productivity and profitability in both regions, while "
         "the larger relative gain in Hebei indicates greater remaining room for "
         "improvement where the current management baseline was lower."
@@ -317,146 +377,188 @@ RESULT_REPLACEMENTS = {
 
 
 DISCUSSION = [
-    ("Heading2", "Baseline-dependent optimization potential"),
     ("2",
-        "This study developed a field-level baseline-to-optimization framework "
-        "to estimate how much maize yield and profit could be improved through "
-        "management adjustment under current production conditions in the North "
-        "China Plain. The main finding was that substantial improvement "
-        "potential remained in both sampled regions, but the magnitude of that "
-        "potential depended strongly on the starting baseline. Shandong already "
-        "had higher planting density, nutrient inputs, yield, and profit, "
-        "whereas Hebei started from a lower baseline and showed larger "
-        "proportional gains after optimization. This pattern is consistent with "
-        "yield-gap theory and evidence that farms farther from attainable "
-        "management frontiers often retain larger relative improvement "
-        "potential (Gerber et al. 2024; van Ittersum et al. 2013). It also "
-        "agrees with studies showing that maize yield gaps in China are closely "
-        "linked to farmer management heterogeneity and inefficient input "
-        "allocation (G. Chen et al. 2019; Meng et al. 2013; H. Wang et al. "
-        "2023). The regional contrast therefore indicates that optimization "
-        "should not be viewed as a single best practice applied uniformly across "
-        "the North China Plain. Instead, the value of each management adjustment "
-        "depends on the current production baseline, the local input structure, "
-        "and the distance from an attainable management frontier."
+        "We developed a field-level baseline-to-optimization framework for "
+        "estimating how much maize yield and profit can still be improved under "
+        "current farming conditions in the North China Plain. The framework "
+        "combines leakage-controlled yield modelling, interpretable feature "
+        "ranking, constrained maximum-yield scenario search, and "
+        "post-optimization profit accounting. In doing so, it shifts the role of "
+        "machine learning from yield prediction alone to opportunity estimation: "
+        "how far current practice is from an empirically attainable management "
+        "configuration, which management pathway accounts for that distance, and "
+        "whether the predicted yield gain remains economically useful. Precision "
+        "agriculture recommendations become more useful when they are "
+        "baseline-aware. The same technology, model, or management package can "
+        "have different value depending on the starting level of local farmer "
+        "practice."
     ),
-    ("Heading2", "Management levers and agronomic meaning"),
+    ("Heading2", "Baseline determines regional optimization potential"),
     ("2",
-        "The results identify irrigation and crop establishment as the central "
-        "management levers connecting regional baseline differences, yield "
-        "prediction, and optimized scenarios. Drip irrigation, plant density, "
-        "sowing date, and irrigation frequency were among the most influential "
-        "predictors, and the optimized scenarios generally selected earlier "
-        "sowing, higher density, and stronger irrigation support. This is "
-        "agronomically plausible for the North China Plain, where summer "
-        "rainfall can support maize growth but uneven precipitation and water "
-        "constraints make irrigation timing and method important for yield "
-        "stability (Fang et al. 2010; Mo et al. 2017; Yang et al. 2015). The "
-        "finding supports the broader view that maize improvement depends on "
-        "coordinated adjustment of water, crop establishment, and nutrients, "
-        "rather than on increasing a single input alone (X. Chen et al. 2014; "
-        "X.-P. Chen et al. 2011; Luo et al. 2023; HaiYan Zhang et al. 2022). "
-        "Nutrient variables were not always the highest-ranked individual "
-        "predictors, but they still entered the optimized management packages. "
-        "This suggests that fertilizer effects should be interpreted in relation "
-        "to crop establishment and water supply rather than as isolated input "
-        "responses."
-    ),
-    ("Heading2", "Economic and decision-support value"),
-    ("2",
-        "Yield-oriented optimization also improved profit in both regions because "
-        "the proportional increase in input cost was much smaller than the gains "
-        "in yield and profit. This result suggests that the optimized scenarios "
-        "were not simply high-cost intensification, but coordinated management "
-        "packages with favorable economic returns. The profit result is "
-        "important because management recommendations based only on predicted "
-        "yield can be misleading when additional inputs raise production costs. "
-        "By separating yield modelling from post-optimization profit accounting, "
-        "the framework keeps the biophysical response and economic consequence "
-        "transparent. Similar model-based optimization studies have shown that "
-        "maize management can improve yield, water productivity, and economic "
-        "returns when multiple performance dimensions are considered together "
-        "(Honghang Zhang et al. 2026). Thus, the contribution of this framework "
-        "is not only prediction, but translation of prediction into "
-        "region-specific estimates of agronomic and economic opportunity."
+        "The regional comparison shows that optimization potential is not an "
+        "absolute property of a crop system; it is conditional on the current "
+        "management baseline. Shandong already had higher plant density, greater "
+        "nutrient input, higher yield, and higher profit. Hebei started from a "
+        "lower productivity baseline and consequently showed the larger "
+        "proportional yield response after optimization. The same algorithmic "
+        "search has different agronomic meaning in the two regions: "
+        "in Shandong it mainly refines an already intensive system, whereas in "
+        "Hebei it identifies a broader management upgrade."
     ),
     ("2",
-        "The framework also has methodological value for precision agriculture "
-        "decision support. Process-based crop models remain essential for "
-        "mechanistic analysis and extrapolation across weather, soil, and "
-        "genotype conditions (Holzworth et al. 2014; Jones et al. 2003; Keating "
-        "et al. 2003), but they cannot always represent the full observed "
-        "sequence of farmer management, including heterogeneous irrigation "
-        "devices, crop-protection operations, timing choices, and field-specific "
-        "cost structures. The constrained machine-learning approach used here "
-        "provides a complementary pathway: it uses field records to identify "
-        "priority adjustment directions while restricting optimization within "
-        "empirically supported management ranges. This is consistent with recent "
-        "calls for interpretable and cautiously constrained machine learning in "
-        "crop decision support (Hu et al. 2023; Smith et al. 2026; Tanaka et al. "
-        "2024). Because the results are based on observational data, however, "
-        "the optimized scenarios should be interpreted as model-estimated "
-        "regional decision-support scenarios rather than field-validated causal "
-        "recommendations."
+        "Baseline-dependent opportunity connects the study to modern yield-gap "
+        "analysis. Yield-gap studies emphasize that the distance to an attainable frontier "
+        "varies across space and time, and that regions closer to stagnation or "
+        "farther from attainable production frontiers require different "
+        "intervention priorities (Gerber et al. 2024; van Ittersum et al. "
+        "2013). Studies in China have reached a similar conclusion for maize: "
+        "farmer management heterogeneity, input allocation, and operational "
+        "implementation explain a substantial share of remaining yield gaps "
+        "(Chen et al. 2019; Meng et al. 2013; Wang et al. 2023). Precision "
+        "agriculture should not begin with a generic prescription. It should "
+        "begin with a diagnosis of where the "
+        "field or region sits relative to its current attainable frontier. That "
+        "diagnosis determines whether decision support should emphasize fine "
+        "tuning, input reallocation, or coordinated system upgrading."
+    ),
+    ("Heading2", "Irrigation and crop establishment are the dominant levers"),
+    ("2",
+        "Irrigation and crop establishment emerged as the management core of the "
+        "optimization pathway. Irrigation method, plant density, sowing date, "
+        "and irrigation frequency ranked among the leading predictors, and the "
+        "optimized scenarios generally selected drip irrigation, earlier sowing, "
+        "higher density, and stronger irrigation support. These variables are "
+        "not independent levers. Plant density and sowing date define the crop "
+        "stand and its seasonal demand for radiation, water, and nutrients; "
+        "irrigation method and frequency determine whether that demand can be "
+        "met under uneven summer rainfall."
+    ),
+    ("2",
+        "High-yield maize systems in China depend on coordinated management "
+        "rather than on increasing one "
+        "input in isolation. Integrated soil-crop management and optimized crop "
+        "management have been shown to increase grain production while reducing "
+        "environmental cost or closing maize supply gaps (Chen et al. 2014; "
+        "Chen et al. 2011; Luo et al. 2023). More recent work on "
+        "climate-smart crop production also argues for co-optimization of "
+        "calendar decisions and management practices rather than single-factor "
+        "adjustment (Xiao et al. 2024; Liu et al. 2026). For the North China "
+        "Plain, where rainfall is concentrated but unevenly distributed, water "
+        "delivery reliability is a particularly important condition for turning "
+        "stand-level yield capacity into harvested yield (Fang et al. 2010; Mo "
+        "et al. 2017; Yang et al. 2015). Decision support should recommend "
+        "management bundles, not isolated actions: earlier sowing and suitable "
+        "density create yield capacity, while irrigation method and frequency "
+        "decide whether that capacity can be realized."
+    ),
+    ("Heading2", "Yield-oriented optimization can remain economically meaningful"),
+    ("2",
+        "The optimized scenarios increased profit as well as yield, which is "
+        "important because agronomic optimum and economic optimum are not "
+        "automatically aligned. A yield-maximizing recommendation can fail at "
+        "farm level if the required input cost absorbs the additional revenue. "
+        "Here, input cost increased only modestly relative to yield and profit "
+        "gains, so the optimized scenarios were not simply high-cost "
+        "intensification. They were higher-performing management bundles in "
+        "which added yield value exceeded added cost."
+    ),
+    ("2",
+        "Profit-aware evaluation is central to precision agriculture because "
+        "the unit of decision is not only a yield response, but a management "
+        "choice made under cost and risk. Within-field evidence from corn "
+        "systems shows that yield stability and gross margin can vary together "
+        "in ways that matter for conservation and site-specific management "
+        "(Adhikari et al. 2023). Studies of maize management also show that "
+        "yield, water productivity, nitrogen use, and profit must be evaluated "
+        "jointly when recommending density, nutrient input, or irrigation "
+        "strategies (Zhang et al. 2022; Zhang et al. 2026). The present "
+        "yield-first, profit-second design makes that tradeoff explicit. It "
+        "allows a biological response surface to identify attainable yield "
+        "scenarios, then tests whether those scenarios survive an economic "
+        "screen. That separation is useful for decision support because it shows "
+        "whether profit gains arise from genuine productivity improvement rather "
+        "than from hidden assumptions about input cost."
+    ),
+    ("Heading2", "Constrained machine learning complements process-based decision support"),
+    ("2",
+        "The methodological value of the framework lies in constrained rather "
+        "than unconstrained machine learning. Process-based crop models remain "
+        "indispensable for testing mechanisms, climate sensitivity, "
+        "soil-water-nitrogen processes, and genotype-by-environment interactions "
+        "(Holzworth et al. 2014; Jones et al. 2003; Keating et al. 2003). "
+        "However, real farmer management data contain heterogeneous irrigation "
+        "devices, crop-protection operations, timing decisions, and cost "
+        "structures that are difficult to parameterize completely in process "
+        "models. Machine learning can learn from such observational complexity, "
+        "but only if the scenario search is kept inside the support of observed "
+        "management conditions."
+    ),
+    ("2",
+        "The approach is consistent with recent agricultural systems and "
+        "precision agriculture literature. Machine learning has become powerful "
+        "for large-scale yield forecasting and field-level prediction (Paudel et "
+        "al. 2021; Nyéki et al. 2021), but accurate prediction does not by "
+        "itself justify management prescription. Fertilizer-recommendation "
+        "studies in Precision Agriculture have shown that machine-learning "
+        "models can be misleading when recommendations are made outside the "
+        "domain where the model has reliable support (Tanaka et al. 2024). "
+        "Explainable-AI studies similarly warn against treating black-box "
+        "associations as causal management effects (Hu et al. 2023). The "
+        "constrained search used here addresses that problem directly. It uses "
+        "machine learning to prioritize management directions and estimate "
+        "opportunity, while leaving mechanism testing, robustness assessment, "
+        "and transferability to multi-year field experiments and process-based "
+        "crop modelling."
     ),
     ("Heading2", "Limitations and future work"),
     ("2",
-        "Several limitations should be considered. The dataset contains 81 field "
-        "observations from Hebei and Shandong in one growing season, so it does "
-        "not capture the full climatic, soil, cultivar, and management diversity "
-        "of the North China Plain. Soil properties, cultivar traits, "
-        "remote-sensing indicators, and multi-year weather variation were not "
-        "explicitly included. In addition, the optimized scenarios represent "
-        "model-estimated outcomes rather than causal effects verified through "
-        "field interventions. Although the empirical bounds and distance penalty "
-        "reduce unsupported extrapolation, they cannot replace experimental "
-        "validation. Future work should test the identified management pathways "
-        "across more years, sites, soil conditions, and cultivar backgrounds, "
-        "combine field records with richer environmental and remote-sensing "
-        "data, and evaluate optimized strategies in field trials. A further "
-        "priority is to link data-driven optimization with process-based crop "
-        "modelling, because the two approaches address different weaknesses and "
-        "would improve confidence in whether the estimated gains remain robust "
-        "across weather years, soil types, and market conditions."
+        "The dataset contains 81 field observations from Hebei and Shandong in "
+        "one growing season, so it "
+        "does not capture the full climatic, soil, cultivar, and management "
+        "diversity of the North China Plain. Second, soil properties, cultivar "
+        "traits, remote-sensing indicators, and multi-year weather variation "
+        "were not explicitly included. Third, the optimized scenarios are "
+        "model-estimated outcomes from observational data, not causal effects "
+        "verified through field intervention. Although empirical bounds and the "
+        "distance penalty reduce unsupported extrapolation, they cannot replace "
+        "experimental validation."
+    ),
+    ("2",
+        "Future work should test the identified management pathways across more "
+        "years, sites, soil conditions, and cultivar backgrounds. The framework "
+        "would also benefit from richer environmental covariates, remote-sensing "
+        "indicators, and explicit uncertainty analysis for scenario predictions. "
+        "A priority is to link this data-driven optimization workflow with "
+        "process-based crop modelling and field experiments. That combination "
+        "would clarify whether the estimated gains remain robust across weather "
+        "years, soil types, and market conditions, and would move the framework "
+        "from regional opportunity estimation toward validated management "
+        "recommendation."
     ),
 ]
 
 
 CONCLUSIONS = [
     (
-        "Using field-level observations from the North China Plain, this study "
-        "developed a leakage-controlled and interpretable machine-learning "
-        "framework to quantify how much maize yield and profit could be improved "
-        "through management optimization under a maximum-yield strategy. The "
-        "results showed that current maize production still retains substantial "
-        "room for improvement in both Hebei and Shandong. Among the candidate "
-        "algorithms, XGBoost provided the best predictive performance and "
-        "identified irrigation-related variables, plant density, and sowing date "
-        "as major predictors of yield variation."
+        "Maize management improvement potential in the North China Plain was "
+        "quantified using a leakage-controlled XGBoost model and a "
+        "constrained baseline-to-optimization framework. Irrigation method, plant "
+        "density, sowing date, and irrigation frequency were the leading "
+        "management-related predictors of yield variation."
     ),
     (
-        "The scenario optimization analysis further demonstrated that management "
-        "adjustment could simultaneously improve yield and profit. Under the "
-        "optimized scenario, median yield increased from 9,585.00 to 12,209.45 "
-        "kg ha\u207b\u00b9 in Hebei and from 10,721.85 to 12,603.64 kg ha\u207b\u00b9 in "
-        "Shandong, while median profit increased from 10,764.39 to 16,163.22 CNY "
-        "ha\u207b\u00b9 and from 12,031.56 to 17,615.88 CNY ha\u207b\u00b9, respectively. The "
-        "larger relative gain observed in Hebei suggests that regions with a "
-        "lower current management baseline may have greater optimization "
-        "potential. Across regions, the main directions of improvement included "
-        "earlier sowing, denser planting, strengthened nutrient input, and more "
-        "effective irrigation support, particularly under drip irrigation."
+        "The maximum-yield scenarios increased both yield and profit in Hebei and "
+        "Shandong. Median yield increased by 27.38% in Hebei and 17.55% in "
+        "Shandong, while median profit increased by 50.15% and 46.41%, "
+        "respectively. The larger relative gain in Hebei indicates that regions "
+        "with lower current management baselines may retain greater optimization "
+        "potential."
     ),
     (
-        "Overall, the study shows that a baseline-to-optimization framework "
-        "driven by explainable machine learning can move beyond factor "
-        "identification and directly quantify region-specific yield and profit "
-        "gains from management improvement. This makes the approach relevant for "
-        "precision agriculture decision support at the regional scale. "
-        "Nevertheless, the current conclusions should be interpreted within the "
-        "support of the existing dataset, and further validation across more "
-        "years, locations, and field experiments is needed before broader "
-        "application."
+        "The framework shows how field observations can be translated into "
+        "region-specific estimates of agronomic and economic opportunity. Its "
+        "use should remain constrained to the support of the observed data until "
+        "multi-year, multi-site, and field-experimental validation is available."
     ),
 ]
 
@@ -465,22 +567,23 @@ DECLARATIONS = [
     ("Heading1", [("Statements and Declarations", False)]),
     ("Heading2", [("Funding", False)]),
     (
-        "BodyText",
+        "2",
         [
             (
                 "This work was funded by Longping Kaihong Agricultural Technology "
                 "(Beijing) Co., Ltd. (\u9686\u5e73\u5f00\u9e3f(\u5317\u4eac)"
-                "\u519c\u4e1a\u79d1\u6280\u6709\u9650\u516c\u53f8). No grant number "
-                "was assigned.",
+                "\u519c\u4e1a\u79d1\u6280\u6709\u9650\u516c\u53f8). The authors "
+                "gratefully acknowledge financial support from the Key Research "
+                "and Development Program of Shaanxi (Grant No. 2023-ZDLNY-64).",
                 False,
             )
         ],
     ),
     ("Heading2", [("Competing Interests", False)]),
-    ("BodyText", [("The authors have no relevant financial or non-financial interests to disclose.", False)]),
+    ("2", [("The authors have no relevant financial or non-financial interests to disclose.", False)]),
     ("Heading2", [("Ethics Approval", False)]),
     (
-        "BodyText",
+        "2",
         [
             (
                 "Not applicable. This study used crop-management and "
@@ -491,14 +594,14 @@ DECLARATIONS = [
         ],
     ),
     ("Heading2", [("Consent to Participate", False)]),
-    ("BodyText", [("Not applicable.", False)]),
+    ("2", [("Not applicable.", False)]),
     ("Heading2", [("Consent to Publish", False)]),
-    ("BodyText", [("All authors have approved the manuscript and consent to its publication.", False)]),
+    ("2", [("All authors have approved the manuscript and consent to its publication.", False)]),
     ("Heading2", [("Data Availability", False)]),
-    ("BodyText", [("The data that support the findings of this study are available from the corresponding author upon reasonable request.", False)]),
+    ("2", [("The data that support the findings of this study are available from the corresponding author upon reasonable request.", False)]),
     ("Heading2", [("Code Availability", False)]),
     (
-        "BodyText",
+        "2",
         [
             (
                 "The analysis code used to generate the model outputs, "
@@ -510,19 +613,19 @@ DECLARATIONS = [
     ),
     ("Heading2", [("Author Contributions", False)]),
     (
-        "BodyText",
+        "2",
         [
             (
-                "Zhiming Xia, Bin Chen, Qiang Yu, and Gang Zhao contributed to the "
+                "Zhiming Xia, Bin Chen, Haijing Shi, Qiang Yu, and Gang Zhao contributed to the "
                 "study conception and design. Zhiming Xia and Bin Chen performed "
                 "the methodology development, data analysis, model construction, "
                 "optimization analysis, and visualization. Qi Shen, Zeyun Liang, "
                 "Ming Tian, Dengke Cao, and Yan Zhao contributed to field "
                 "investigation, data collection, data curation, and resources. "
                 "Zhiming Xia wrote the first draft of the manuscript. Bin Chen, "
-                "Qi Shen, Zeyun Liang, Ming Tian, Dengke Cao, Yan Zhao, Qiang Yu, "
-                "and Gang Zhao reviewed and edited the manuscript. Qiang Yu and "
-                "Gang Zhao supervised the work and contributed to funding "
+                "Qi Shen, Zeyun Liang, Ming Tian, Dengke Cao, Yan Zhao, Haijing "
+                "Shi, Qiang Yu, and Gang Zhao reviewed and edited the manuscript. "
+                "Qiang Yu and Gang Zhao supervised the work and contributed to funding "
                 "acquisition. All authors read and approved the final manuscript.",
                 False,
             )
@@ -622,6 +725,252 @@ TABLE2_SUMMARY = [
 ]
 
 
+OPTIMIZATION_METHOD_DETAILS = [
+    (
+        "After model comparison, the selected yield model was used as a response "
+        "function for regional management-scenario evaluation. For each field, "
+        "candidate management values replaced the optimized management variables "
+        "while non-optimized background variables were retained from the original "
+        "field record. The optimized scenario was therefore evaluated against "
+        "the observed regional production context rather than as a fully "
+        "synthetic field."
+    ),
+    (
+        "The direct decision variables were sowing day of year, plant density, "
+        "N, P, and K application rates, pesticide cost, irrigation electricity "
+        "use, and irrigation method. Irrigation electricity use was set to zero "
+        "under the no-irrigation scenario. Fertilization frequency, pesticide "
+        "application frequency, and irrigation frequency were inferred from "
+        "related management intensities using monotonic isotonic-regression "
+        "relationships fitted within each region: fertilization frequency from "
+        "total nutrient input, pesticide frequency from pesticide cost, and "
+        "irrigation frequency from irrigation electricity use under the "
+        "corresponding irrigation mode."
+    ),
+    (
+        "For each region, irrigation methods observed in that region were "
+        "evaluated by enumeration. For each candidate irrigation method, "
+        "continuous decision variables were searched using differential "
+        "evolution. The regional objective maximized median predicted yield "
+        "across fields in the region after subtracting a distance penalty based "
+        "on the standardized nearest-neighbour distance between the candidate "
+        "management vector and observed regional management records. This "
+        "penalty reduced the influence of unsupported extrapolation."
+    ),
+    (
+        "The feasible search space was region specific. Search bounds for "
+        "continuous variables were restricted to the 5th and 95th percentiles "
+        "of the observed regional distributions. Candidate values were "
+        "quantized before model evaluation: sowing date to 1 d, plant density "
+        "to 500 plants ha\u207b\u00b9, N, P, and K inputs to 5 kg ha\u207b\u00b9, pesticide "
+        "cost to 50 CNY ha\u207b\u00b9, and irrigation electricity use to 50 kWh "
+        "ha\u207b\u00b9. The differential-evolution search used a random seed of 42, "
+        "120 maximum iterations, a population-size multiplier of 12, and a "
+        "distance-penalty weight of 150.0."
+    ),
+    (
+        "Optimized regional yield was reported as the unpenalized median "
+        "predicted yield under the selected regional management vector. The "
+        "current regional baseline was calculated directly from observed data, "
+        "not from model predictions. Specifically, baseline yield, input cost, "
+        "profit, and management values were calculated as regional medians of "
+        "the observed field records."
+    ),
+    (
+        "Scenario input cost was estimated using a yield-first, profit-second "
+        "framework. Cost records were linked to the modelling data by field "
+        "identifier. Three linear cost submodels were fitted from the observed "
+        "data: sowing cost as a function of plant density, fertilization cost "
+        "as a function of N, P, and K application rates, and irrigation running "
+        "cost as a function of irrigation electricity use. Irrigation device "
+        "cost was assigned as the median observed device cost for the candidate "
+        "irrigation method."
+    ),
+    (
+        "For each field, the observed cost not explained by scenario-dependent "
+        "sowing, fertilization, pesticide, irrigation-running, and irrigation "
+        "device components was treated as a fixed residual. Total scenario cost "
+        "was calculated as the sum of this fixed residual and the "
+        "scenario-dependent cost components. Scenario profit was then calculated "
+        "from maize grain price multiplied by predicted yield minus total "
+        "scenario input cost, and regional scenario profit was summarized as "
+        "the median across fields within each region."
+    ),
+    (
+        "Yield and profit gains were calculated by comparing the optimized "
+        "maximum-yield scenario with the observed regional baseline. Absolute "
+        "gains were computed as optimized minus baseline values, and relative "
+        "gains were computed as absolute gains divided by the corresponding "
+        "baseline value."
+    ),
+]
+
+
+REGIONAL_OPTIMIZATION_METHOD_BLOCK = [
+    (
+        "Heading3",
+        "Optimization objective and decision variables",
+    ),
+    (
+        "2",
+        "After model comparison, the selected yield model was used as a regional "
+        "response function for management-scenario evaluation. For each field, "
+        "candidate values replaced the optimized management variables while "
+        "non-optimized background variables were retained from the original "
+        "field record. The regional objective was the median predicted yield "
+        "across all fields within a region, and the management combination that "
+        "maximized this objective was defined as the regional maximum-yield "
+        "strategy."
+    ),
+    (
+        "2",
+        "The direct decision variables were sowing day of year, plant density, "
+        "N, P, and K application rates, pesticide cost, irrigation electricity "
+        "use, and irrigation method. Irrigation electricity use was set to zero "
+        "under the no-irrigation scenario. Fertilization frequency, pesticide "
+        "application frequency, and irrigation frequency were inferred from "
+        "related management intensities using monotonic isotonic-regression "
+        "relationships fitted within each region. This design avoided "
+        "unrealistic combinations in which input rates and operation counts "
+        "moved in contradictory directions."
+    ),
+    (
+        "Heading3",
+        "Feasible search and extrapolation control",
+    ),
+    (
+        "2",
+        "Irrigation methods observed in each region were evaluated by "
+        "enumeration. For each candidate irrigation method, continuous decision "
+        "variables were searched using differential evolution because the "
+        "objective function was nonlinear, non-smooth, and non-differentiable "
+        "(Storn and Price 1997). The penalized objective subtracted a "
+        "standardized nearest-neighbour distance penalty from median predicted "
+        "yield to discourage multivariate management combinations far from "
+        "observed regional management records."
+    ),
+    (
+        "2",
+        "The feasible search space was region specific. Search bounds for "
+        "continuous variables were restricted to the 5th and 95th percentiles "
+        "of the observed regional distributions. Candidate values were "
+        "quantized before model evaluation: sowing date to 1 d, plant density "
+        "to 500 plants ha\u207b\u00b9, N, P, and K inputs to 5 kg ha\u207b\u00b9, pesticide "
+        "cost to 50 CNY ha\u207b\u00b9, and irrigation electricity use to 50 kWh "
+        "ha\u207b\u00b9. The differential-evolution search used a random seed of 42, "
+        "120 maximum iterations, a population-size multiplier of 12, and a "
+        "distance-penalty weight of 150.0."
+    ),
+    (
+        "Heading3",
+        "Scenario cost and profit evaluation",
+    ),
+    (
+        "2",
+        "Optimized regional yield was reported as the unpenalized median "
+        "predicted yield under the selected regional management vector. The "
+        "current regional baseline was calculated directly from observed data, "
+        "not from model predictions. Specifically, baseline yield, input cost, "
+        "profit, and management values were calculated as regional medians of "
+        "the observed field records."
+    ),
+    (
+        "2",
+        "Scenario input cost was estimated using a yield-first, profit-second "
+        "framework. Cost records were linked to the modelling data by field "
+        "identifier. Three linear cost submodels were fitted from the observed "
+        "data: sowing cost as a function of plant density, fertilization cost "
+        "as a function of N, P, and K application rates, and irrigation running "
+        "cost as a function of irrigation electricity use. Irrigation device "
+        "cost was assigned as the median observed device cost for the candidate "
+        "irrigation method."
+    ),
+    (
+        "2",
+        "For each field, the observed cost not explained by scenario-dependent "
+        "sowing, fertilization, pesticide, irrigation-running, and irrigation "
+        "device components was treated as a fixed residual. Total scenario cost "
+        "was calculated as the sum of this fixed residual and the "
+        "scenario-dependent cost components. Scenario profit was calculated "
+        "from maize grain price multiplied by predicted yield minus total "
+        "scenario input cost. Yield and profit gains were then calculated by "
+        "comparing the optimized maximum-yield scenario with the observed "
+        "regional baseline."
+    ),
+]
+
+
+FIELD_MEASUREMENT_BLOCK = [
+    (
+        "At maize maturity, grain yield was estimated from field sampling. Grain "
+        "yield (Y, kg ha\u207b\u00b9) was calculated as:"
+    ),
+    ("Y = HEN \u00d7 KNE \u00d7 TKW / 1,000,000"),
+    (
+        "where HEN is harvested ear number per hectare, KNE is average kernel "
+        "number per ear, and TKW is 1000-kernel weight (g). The number of "
+        "sampling points was determined according to field size and within-field "
+        "growth variation. Three sampling points were randomly selected for "
+        "fields smaller than 0.67 ha with relatively small growth variation, "
+        "five sampling points were selected for fields larger than 0.67 ha or "
+        "with relatively large growth variation, and nine sampling points were "
+        "selected for fields of 6.67 ha or larger."
+    ),
+    (
+        "At each sampling point, harvested ear number per hectare was calculated "
+        "as:"
+    ),
+    ("HEN = 10,000 / (PS \u00d7 RS)"),
+    (
+        "where PS and RS are plant spacing and row spacing (m), respectively. "
+        "Average kernel number per ear was estimated from 20 consecutive ears, "
+        "and 1000-kernel weight was measured after air-drying the grains to 14% "
+        "moisture content."
+    ),
+    (
+        "All agronomic and economic variables used in the analysis were "
+        "expressed on a per-hectare basis. Total input cost was calculated as "
+        "the sum of sowing cost, irrigation equipment cost, irrigation operating "
+        "cost, pesticide cost, fertilization cost, and land rent. Profit was "
+        "calculated after yield prediction rather than being used as a model "
+        "input:"
+    ),
+    ("Profit = p \u00d7 Y - C"),
+    (
+        "where Profit is net return (CNY ha\u207b\u00b9), p is maize grain price "
+        "(CNY kg\u207b\u00b9), Y is grain yield (kg ha\u207b\u00b9), and C is total input "
+        "cost (CNY ha\u207b\u00b9). In this study, p was set to 2.4 CNY kg\u207b\u00b9. A "
+        "detailed description of the variables used for yield modelling is "
+        "provided in Table 1."
+    ),
+]
+
+
+MODEL_EVALUATION_BLOCK = [
+    (
+        "The dataset was randomly divided into a training set (80%) and an "
+        "independent validation set (20%) using a fixed random seed of 42. The "
+        "same split was used for all algorithms. Each model was trained with the "
+        "optimal hyperparameter settings selected before the final comparison, "
+        "and fivefold cross-validation within the training set was used to "
+        "estimate training-set predictive stability using negative RMSE as the "
+        "scoring criterion. Model performance was evaluated on both the training "
+        "and validation sets using the coefficient of determination (R\u00b2) and "
+        "root mean square error (RMSE):"
+    ),
+    ("R\u00b2 = 1 - sum((y_i - yhat_i)^2) / sum((y_i - ybar)^2)"),
+    ("RMSE = sqrt(sum((y_i - yhat_i)^2) / n)"),
+    (
+        "where y_i and yhat_i are the observed and predicted yields for "
+        "observation i, respectively, ybar is the mean observed yield, and n is "
+        "the number of observations in the evaluated split. The final model for "
+        "scenario analysis was selected primarily according to validation "
+        "performance, while also considering the gap between training and "
+        "validation R\u00b2."
+    ),
+]
+
+
 def paragraph_text(p):
     return "".join(p.xpath(".//w:t/text()", namespaces=NS)).strip()
 
@@ -650,22 +999,160 @@ def set_alignment(p, value):
 def set_paragraph_text(p, segments):
     clear_runs(p)
     for text, bold in segments:
-        r = etree.SubElement(p, W + "r")
+        append_run(p, text, bold=bold)
+
+
+def append_run(parent, text, bold=False, hyperlink=False, superscript=False):
+    r = etree.SubElement(parent, W + "r")
+    if bold or hyperlink or superscript:
+        rpr = etree.SubElement(r, W + "rPr")
         if bold:
-            rpr = etree.SubElement(r, W + "rPr")
             etree.SubElement(rpr, W + "b")
-        t = etree.SubElement(r, W + "t")
-        if text[:1].isspace() or text[-1:].isspace():
-            t.set(f"{{{XML_NS}}}space", "preserve")
-        t.text = text
+        if hyperlink:
+            color = etree.SubElement(rpr, W + "color")
+            color.set(W + "val", "000000")
+            u = etree.SubElement(rpr, W + "u")
+            u.set(W + "val", "none")
+        if superscript:
+            vert = etree.SubElement(rpr, W + "vertAlign")
+            vert.set(W + "val", "superscript")
+    t = etree.SubElement(r, W + "t")
+    if text[:1].isspace() or text[-1:].isspace():
+        t.set(f"{{{XML_NS}}}space", "preserve")
+    t.text = text
+
+
+def set_author_line(p):
+    clear_runs(p)
+    parts = [
+        ("Zhiming Xia", "1", ", "),
+        ("Bin Chen", "1", ", "),
+        ("Qi Shen", "2", ", "),
+        ("Zeyun Liang", "2", ", "),
+        ("Ming Tian", "2", ", "),
+        ("Dengke Cao", "3", ", "),
+        ("Yan Zhao", "4", ", "),
+        ("Haijing Shi", "1", ", "),
+        ("Qiang Yu", "1", ", "),
+        ("Gang Zhao", "1,*", ""),
+    ]
+    for name, marker, suffix in parts:
+        append_run(p, name)
+        append_run(p, marker, superscript=True)
+        if suffix:
+            append_run(p, suffix)
+
+
+def append_hyperlink(p, text, anchor):
+    link = etree.SubElement(p, W + "hyperlink")
+    link.set(W + "anchor", anchor)
+    link.set(W + "history", "1")
+    append_run(link, text, hyperlink=True)
+
+
+def max_bookmark_id(root):
+    values = root.xpath(".//w:bookmarkStart/@w:id", namespaces=NS)
+    return max([int(v) for v in values if v.isdigit()], default=0)
+
+
+def add_bookmark(p, name, bookmark_id):
+    start = etree.Element(W + "bookmarkStart")
+    start.set(W + "id", str(bookmark_id))
+    start.set(W + "name", name)
+    end = etree.Element(W + "bookmarkEnd")
+    end.set(W + "id", str(bookmark_id))
+    insert_at = 1 if len(p) and p[0].tag == W + "pPr" else 0
+    p.insert(insert_at, start)
+    p.append(end)
+
+
+def add_internal_links(body, root):
+    next_id = max_bookmark_id(root) + 1
+    linked_terms = {}
+
+    for p in list(body):
+        if p.tag != W + "p":
+            continue
+        text = paragraph_text(p)
+        for idx in range(1, 12):
+            if text.startswith(f"Figure {idx}."):
+                add_bookmark(p, FIGURE_TABLE_ANCHORS[f"Figure {idx}"], next_id)
+                next_id += 1
+        for idx in range(1, 3):
+            if text.startswith(f"Table {idx}."):
+                add_bookmark(p, FIGURE_TABLE_ANCHORS[f"Table {idx}"], next_id)
+                next_id += 1
+
+    for citation, prefix, anchor in CITATION_TARGETS:
+        for p in list(body):
+            if p.tag != W + "p":
+                continue
+            if paragraph_text(p).startswith(prefix):
+                add_bookmark(p, anchor, next_id)
+                linked_terms[citation] = anchor
+                next_id += 1
+                break
+
+    linked_terms.update(FIGURE_TABLE_ANCHORS)
+    terms = sorted(linked_terms, key=len, reverse=True)
+    matcher = re.compile("|".join(re.escape(term) for term in terms))
+
+    in_references = False
+    for p in list(body):
+        if p.tag != W + "p":
+            continue
+        text = paragraph_text(p)
+        if text == "References":
+            in_references = True
+            continue
+        if in_references or text.startswith(("Figure ", "Table ")):
+            continue
+        matches = list(matcher.finditer(text))
+        if not matches:
+            continue
+        clear_runs(p)
+        last = 0
+        for match in matches:
+            if match.start() > last:
+                append_run(p, text[last:match.start()])
+            term = match.group(0)
+            append_hyperlink(p, term, linked_terms[term])
+            last = match.end()
+        if last < len(text):
+            append_run(p, text[last:])
+
+
+def restore_study_area_geography(body):
+    study_area_text = (
+        "The North China Plain (NCP), located approximately between 32°-40°N "
+        "and 114°-121°E, is one of the most important grain-producing regions "
+        "in China and contributes substantially to national food production "
+        "(Fang et al. 2010; W. Liu et al. 2021). Cropping systems in this "
+        "region are highly intensive, and the winter wheat-summer maize "
+        "rotation is widely practiced across the plain (Fang et al. 2010). The "
+        "NCP is a low-relief alluvial plain with an average elevation of "
+        "approximately 20 m above sea level. It is characterized by a "
+        "warm-temperate monsoon climate, with mean annual temperatures ranging "
+        "from 8 to 15°C and annual precipitation of approximately 500-900 mm. "
+        "Precipitation is unevenly distributed throughout the year, with most "
+        "rainfall concentrated in summer. Although this seasonal pattern "
+        "generally supports summer maize growth, irrigation remains important "
+        "for stabilizing crop water supply and reducing the risk of drought "
+        "stress during critical growth stages (Fang et al. 2010; Mo et al. "
+        "2017; Yang et al. 2015)."
+    )
+    for p in list(body):
+        if p.tag == W + "p" and paragraph_text(p).startswith("The North China Plain (NCP), located approximately"):
+            set_paragraph_text(p, [(study_area_text, False)])
+            break
 
 
 def set_title_text(p):
     clear_runs(p)
     set_alignment(p, "left")
     parts = [
-        "Quantifying Yield and Profit Improvement Potential of Maize",
-        "through Management Optimization under Current Farming",
+        "Quantifying Yield and Profit Improvement Potential of Maize ",
+        "through Management Optimization under Current Farming ",
         "Conditions in the North China Plain of China",
     ]
     for idx, text in enumerate(parts):
@@ -675,6 +1162,8 @@ def set_title_text(p):
         sz = etree.SubElement(rpr, W + "sz")
         sz.set(W + "val", "28")
         t = etree.SubElement(r, W + "t")
+        if text[:1].isspace() or text[-1:].isspace():
+            t.set(f"{{{XML_NS}}}space", "preserve")
         t.text = text
         if idx < len(parts) - 1:
             etree.SubElement(r, W + "br")
@@ -737,11 +1226,231 @@ def make_compact_table(rows):
     return tbl
 
 
+def first_child(parent, tag):
+    child = parent.find(W + tag)
+    if child is None:
+        child = etree.Element(W + tag)
+        parent.insert(0, child)
+    return child
+
+
+def set_width(el, width, width_type="dxa"):
+    el.set(W + "w", str(width))
+    el.set(W + "type", width_type)
+
+
+def set_cell_margins(tblpr, margin=80):
+    margins = tblpr.find(W + "tblCellMar")
+    if margins is None:
+        margins = etree.SubElement(tblpr, W + "tblCellMar")
+    for side in ("top", "left", "bottom", "right"):
+        elem = margins.find(W + side)
+        if elem is None:
+            elem = etree.SubElement(margins, W + side)
+        elem.set(W + "w", str(margin))
+        elem.set(W + "type", "dxa")
+
+
+def set_table_borders(tblpr):
+    borders = tblpr.find(W + "tblBorders")
+    if borders is None:
+        borders = etree.SubElement(tblpr, W + "tblBorders")
+    for side in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        border = borders.find(W + side)
+        if border is None:
+            border = etree.SubElement(borders, W + side)
+        border.set(W + "val", "single")
+        border.set(W + "sz", "4")
+        border.set(W + "space", "0")
+        border.set(W + "color", "9A9A9A")
+
+
+def set_run_size(run, half_points):
+    rpr = first_child(run, "rPr")
+    for tag in ("sz", "szCs"):
+        elem = rpr.find(W + tag)
+        if elem is None:
+            elem = etree.SubElement(rpr, W + tag)
+        elem.set(W + "val", str(half_points))
+
+
+def set_paragraph_compact(p):
+    ppr = first_child(p, "pPr")
+    spacing = ppr.find(W + "spacing")
+    if spacing is None:
+        spacing = etree.SubElement(ppr, W + "spacing")
+    spacing.set(W + "before", "0")
+    spacing.set(W + "after", "0")
+    spacing.set(W + "line", "210")
+    spacing.set(W + "lineRule", "auto")
+
+
+def mark_header_row(row):
+    trpr = first_child(row, "trPr")
+    if trpr.find(W + "tblHeader") is None:
+        etree.SubElement(trpr, W + "tblHeader")
+
+
+def normalize_table(tbl, column_widths, font_half_points=16):
+    tblpr = first_child(tbl, "tblPr")
+    tblw = tblpr.find(W + "tblW")
+    if tblw is None:
+        tblw = etree.SubElement(tblpr, W + "tblW")
+    set_width(tblw, sum(column_widths))
+    layout = tblpr.find(W + "tblLayout")
+    if layout is None:
+        layout = etree.SubElement(tblpr, W + "tblLayout")
+    layout.set(W + "type", "fixed")
+    jc = tblpr.find(W + "jc")
+    if jc is None:
+        jc = etree.SubElement(tblpr, W + "jc")
+    jc.set(W + "val", "center")
+    set_cell_margins(tblpr)
+    set_table_borders(tblpr)
+
+    grid = tbl.find(W + "tblGrid")
+    if grid is None:
+        grid = etree.Element(W + "tblGrid")
+        tbl.insert(1 if tbl.find(W + "tblPr") is not None else 0, grid)
+    for child in list(grid):
+        grid.remove(child)
+    for width in column_widths:
+        col = etree.SubElement(grid, W + "gridCol")
+        col.set(W + "w", str(width))
+
+    for row_idx, row in enumerate(tbl.findall(W + "tr")):
+        if row_idx == 0:
+            mark_header_row(row)
+        for col_idx, cell in enumerate(row.findall(W + "tc")):
+            tcpr = first_child(cell, "tcPr")
+            tcw = tcpr.find(W + "tcW")
+            if tcw is None:
+                tcw = etree.SubElement(tcpr, W + "tcW")
+            set_width(tcw, column_widths[min(col_idx, len(column_widths) - 1)])
+            v_align = tcpr.find(W + "vAlign")
+            if v_align is None:
+                v_align = etree.SubElement(tcpr, W + "vAlign")
+            v_align.set(W + "val", "center")
+            for p in cell.findall(W + "p"):
+                set_paragraph_compact(p)
+                for run in p.findall(W + "r"):
+                    set_run_size(run, font_half_points)
+                    if row_idx == 0:
+                        rpr = first_child(run, "rPr")
+                        if rpr.find(W + "b") is None:
+                            etree.SubElement(rpr, W + "b")
+
+
+def normalize_table_after_caption(body, caption_prefix, column_widths, font_half_points=16):
+    children = list(body)
+    cap_idx = next(i for i, p in enumerate(children) if p.tag == W + "p" and paragraph_text(p).startswith(caption_prefix))
+    tbl = next(children[i] for i in range(cap_idx + 1, len(children)) if children[i].tag == W + "tbl")
+    normalize_table(tbl, column_widths, font_half_points)
+
+
+def table_rows_as_text(tbl):
+    rows = []
+    replacements = {
+        "Pre": "Precip",
+        "Kg ha\u207b\u00b9": "kg ha\u207b\u00b9",
+    }
+    for row in tbl.findall(W + "tr"):
+        row_text = []
+        for cell in row.findall(W + "tc"):
+            text = "".join(cell.xpath(".//w:t/text()", namespaces=NS)).strip()
+            row_text.append(replacements.get(text, text))
+        rows.append(row_text)
+    return rows
+
+
+def make_clean_cell(text, width, bold=False, font_half_points=15):
+    tc = etree.Element(W + "tc")
+    tcpr = etree.SubElement(tc, W + "tcPr")
+    tcw = etree.SubElement(tcpr, W + "tcW")
+    set_width(tcw, width)
+    valign = etree.SubElement(tcpr, W + "vAlign")
+    valign.set(W + "val", "center")
+
+    p = etree.SubElement(tc, W + "p")
+    set_paragraph_compact(p)
+    ppr = p.find(W + "pPr")
+    jc = ppr.find(W + "jc")
+    if jc is None:
+        jc = etree.SubElement(ppr, W + "jc")
+    jc.set(W + "val", "left")
+
+    r = etree.SubElement(p, W + "r")
+    rpr = etree.SubElement(r, W + "rPr")
+    fonts = etree.SubElement(rpr, W + "rFonts")
+    fonts.set(W + "ascii", "Times New Roman")
+    fonts.set(W + "hAnsi", "Times New Roman")
+    fonts.set(W + "cs", "Times New Roman")
+    if bold:
+        etree.SubElement(rpr, W + "b")
+    for tag in ("sz", "szCs"):
+        size = etree.SubElement(rpr, W + tag)
+        size.set(W + "val", str(font_half_points))
+    t = etree.SubElement(r, W + "t")
+    if text[:1].isspace() or text[-1:].isspace():
+        t.set(f"{{{XML_NS}}}space", "preserve")
+    t.text = text
+    return tc
+
+
+def make_clean_table(rows, column_widths, font_half_points=15):
+    tbl = etree.Element(W + "tbl")
+    tblpr = etree.SubElement(tbl, W + "tblPr")
+    tblw = etree.SubElement(tblpr, W + "tblW")
+    set_width(tblw, sum(column_widths))
+    jc = etree.SubElement(tblpr, W + "jc")
+    jc.set(W + "val", "center")
+    layout = etree.SubElement(tblpr, W + "tblLayout")
+    layout.set(W + "type", "fixed")
+    set_cell_margins(tblpr)
+    set_table_borders(tblpr)
+
+    grid = etree.SubElement(tbl, W + "tblGrid")
+    for width in column_widths:
+        col = etree.SubElement(grid, W + "gridCol")
+        col.set(W + "w", str(width))
+
+    for row_idx, row_values in enumerate(rows):
+        tr = etree.SubElement(tbl, W + "tr")
+        if row_idx == 0:
+            mark_header_row(tr)
+        for col_idx, text in enumerate(row_values):
+            width = column_widths[min(col_idx, len(column_widths) - 1)]
+            tr.append(make_clean_cell(text, width, row_idx == 0, font_half_points))
+    return tbl
+
+
+def replace_table_after_caption_with_clean_table(body, caption_prefix, column_widths, font_half_points=15):
+    children = list(body)
+    cap_idx = next(i for i, p in enumerate(children) if p.tag == W + "p" and paragraph_text(p).startswith(caption_prefix))
+    tbl_idx = next(i for i in range(cap_idx + 1, len(children)) if children[i].tag == W + "tbl")
+    rows = table_rows_as_text(children[tbl_idx])
+    body[tbl_idx] = make_clean_table(rows, column_widths, font_half_points)
+
+
 def replace_range(body, start_pred, end_pred, new_paragraphs):
     children = list(body)
     start = next(i for i, p in enumerate(children) if p.tag == W + "p" and start_pred(p))
     end = next(i for i, p in enumerate(children[start + 1 :], start + 1) if p.tag == W + "p" and end_pred(p))
     body[start + 1 : end] = new_paragraphs
+
+
+def replace_range_including_start(body, start_pred, end_pred, new_paragraphs):
+    children = list(body)
+    start = next(i for i, p in enumerate(children) if p.tag == W + "p" and start_pred(p))
+    end = next(i for i, p in enumerate(children[start + 1 :], start + 1) if p.tag == W + "p" and end_pred(p))
+    body[start:end] = new_paragraphs
+
+
+def append_to_section(body, heading_text, next_heading_text, new_paragraphs):
+    children = list(body)
+    start = next(i for i, p in enumerate(children) if p.tag == W + "p" and paragraph_text(p) == heading_text)
+    end = next(i for i, p in enumerate(children[start + 1 :], start + 1) if p.tag == W + "p" and paragraph_text(p) == next_heading_text)
+    body[end:end] = new_paragraphs
 
 
 def replace_table_after_caption_with_paragraphs(body, caption_prefix, rows, body_template):
@@ -767,6 +1476,16 @@ def main():
 
         title_p = next(p for p in children if p.tag == W + "p" and paragraph_text(p).startswith("Quantifying Yield"))
         set_title_text(title_p)
+
+        author_p = next(p for p in children if p.tag == W + "p" and paragraph_text(p).startswith("Zhiming Xia"))
+        set_paragraph_text(
+            author_p,
+            [(
+                "Zhiming Xia1, Bin Chen1, Qi Shen2, Zeyun Liang2, Ming Tian2, "
+                "Dengke Cao3, Yan Zhao4, Haijing Shi1, Qiang Yu1, Gang Zhao1,*",
+                False,
+            )],
+        )
 
         for p in children:
             if p.tag != W + "p":
@@ -814,6 +1533,47 @@ def main():
                     set_paragraph_text(p, [(replacement, False)])
                     break
 
+        children = list(body)
+        for p in children:
+            if p.tag != W + "p":
+                continue
+            text = paragraph_text(p)
+            if "T. Chen and Guestrin 2016" in text:
+                set_paragraph_text(p, [(text.replace("T. Chen and Guestrin 2016", "Chen and Guestrin 2016"), False)])
+            if text.startswith("The yield model was developed to predict maize grain yield"):
+                set_paragraph_text(
+                    p,
+                    [(
+                        "The yield model was developed to predict maize grain yield "
+                        "from observed management, field-status, and weather "
+                        "variables. The field identifier was excluded from "
+                        "modelling, and yield was used only as the response "
+                        "variable. Total input cost and profit were not included "
+                        "as model predictors, thereby avoiding leakage from "
+                        "economic accounting variables that are directly derived "
+                        "from yield or input-cost calculations. Pesticide cost was "
+                        "retained as a crop-protection management variable because "
+                        "it describes observed management intensity rather than "
+                        "the total economic outcome.",
+                        False,
+                    )],
+                )
+                break
+
+        replace_range_including_start(
+            body,
+            lambda p: paragraph_text(p).startswith("At maize maturity, grain yield was estimated"),
+            lambda p: paragraph_text(p).startswith("Table 1."),
+            [make_paragraph("2", [(text, False)], body_template) for text in FIELD_MEASUREMENT_BLOCK],
+        )
+
+        replace_range_including_start(
+            body,
+            lambda p: paragraph_text(p).startswith("The dataset was randomly divided into a training set"),
+            lambda p: paragraph_text(p) == "Regional management optimization and profit evaluation",
+            [make_paragraph("2", [(text, False)], body_template) for text in MODEL_EVALUATION_BLOCK],
+        )
+
         replace_range(
             body,
             lambda p: paragraph_text(p) == "Discussion",
@@ -848,13 +1608,42 @@ def main():
                     set_paragraph_text(p, [(label, True), (" " + caption, False)])
                     break
 
-        replace_table_after_caption_with_paragraphs(body, "Table 1.", TABLE1_SUMMARY, body_template)
-        replace_table_after_caption_with_paragraphs(body, "Table 2.", TABLE2_SUMMARY, body_template)
+        replace_range(
+            body,
+            lambda p: paragraph_text(p) == "Regional management optimization and profit evaluation",
+            lambda p: paragraph_text(p) == "Results",
+            [
+                make_paragraph(
+                    style,
+                    [(text, False)],
+                    heading_template if style.startswith("Heading") else body_template,
+                )
+                for style, text in REGIONAL_OPTIMIZATION_METHOD_BLOCK
+            ],
+        )
+
+        replace_table_after_caption_with_clean_table(body, "Table 1.", [1200, 1450, 5100, 1250], 15)
+        replace_table_after_caption_with_clean_table(body, "Table 2.", [2350, 1600, 1600, 1725, 1725], 15)
+
+        for p in list(body):
+            if p.tag != W + "p":
+                continue
+            text = paragraph_text(p)
+            if "T. Chen and Guestrin 2016" in text:
+                set_paragraph_text(p, [(text.replace("T. Chen and Guestrin 2016", "Chen and Guestrin 2016"), False)])
+
+        restore_study_area_geography(body)
+        add_internal_links(body, root)
 
         updated_xml = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone="yes")
         with ZipFile(OUTPUT, "w", ZIP_DEFLATED) as zout:
             for item in zin.infolist():
-                data = updated_xml if item.filename == "word/document.xml" else zin.read(item.filename)
+                if item.filename == "word/document.xml":
+                    data = updated_xml
+                elif item.filename in MEDIA_REPLACEMENTS and MEDIA_REPLACEMENTS[item.filename].exists():
+                    data = MEDIA_REPLACEMENTS[item.filename].read_bytes()
+                else:
+                    data = zin.read(item.filename)
                 zout.writestr(item, data)
 
 
